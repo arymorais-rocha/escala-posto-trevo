@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minha Escala · Posto Trevo</title>
+<meta name="theme-color" content="#312E81">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Minha Escala">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: uma coluna para celular. Topo com o nome, cartão de hoje, calendário do mês e detalhe do dia tocado. */
+:root{
+  --bg:#F1F3F8; --surface:#FFFFFF; --ink:#1B2033; --ink-soft:#5E6680; --rule:#DFE3EE;
+  --brand:#312E81; --brand-deep:#1E1B4B; --amber:#FBBF24; --amber-soft:#FEF3C7;
+  --trab:#DDF3E5; --trab-ink:#17703F; --folga:#FBE1E5; --folga-ink:#B42335;
+  --noite:#312E81; --noite-ink:#FFFFFF; --caixa:#B45309; --ferias:#FDF0D5; --ferias-ink:#9A5B0A;
+  --dom:#312E81;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F1020; --surface:#1A1C33; --ink:#ECEEF8; --ink-soft:#A3A9C4; --rule:#2C2F4D;
+    --trab:#173B27; --trab-ink:#8BE3AE; --folga:#46202A; --folga-ink:#FF9BAA;
+    --noite:#5B57D6; --dom:#FBBF24; --ferias:#43331A; --ferias-ink:#F3C77B; --amber-soft:#3A2F12;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box;}
+html,body{margin:0;}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;-webkit-font-smoothing:antialiased;min-height:100vh;}
+button,input,select{font-family:inherit;font-size:16px;}
+[hidden]{display:none !important;}
+
+.topo{background:var(--brand);color:#fff;padding:calc(14px + env(safe-area-inset-top,0px)) max(18px, env(safe-area-inset-right,0px)) 16px max(18px, env(safe-area-inset-left,0px));}
+.topo .linha{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px;}
+.logo{width:40px;height:40px;border-radius:11px;background:var(--amber);color:var(--brand-deep);display:grid;place-items:center;font-size:21px;flex:none;}
+.topo h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em;}
+.topo p{margin:2px 0 0;font-size:12.5px;color:#C7CBF0;}
+.sair{margin-left:auto;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;}
+
+main{max-width:560px;margin:0 auto;padding:16px max(16px, env(safe-area-inset-right,0px)) calc(32px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px;}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px;}
+
+/* login */
+.login h2{margin:0 0 4px;font-size:20px;}
+.login p{margin:0 0 16px;color:var(--ink-soft);font-size:14px;line-height:1.5;}
+.campo{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.campo label{font-size:13px;font-weight:700;color:var(--ink-soft);}
+.campo select,.campo input{width:100%;padding:13px 14px;border:1px solid var(--rule);border-radius:11px;background:var(--bg);color:var(--ink);}
+.campo input{letter-spacing:.3em;font-weight:700;font-variant-numeric:tabular-nums;}
+.btn{width:100%;border:none;border-radius:12px;padding:14px;font-weight:700;cursor:pointer;background:var(--amber);color:var(--brand-deep);font-size:16px;}
+.btn:disabled{opacity:.6;}
+.erro{color:var(--folga-ink);font-weight:600;font-size:14px;margin:0 0 12px;}
+.dica{font-size:13px;color:var(--ink-soft);text-align:center;margin-top:12px;}
+
+/* hoje */
+.hoje{display:flex;flex-direction:column;gap:6px;border:none;color:#fff;background:linear-gradient(160deg,var(--brand) 0%,var(--brand-deep) 100%);}
+.hoje .rot{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#C7CBF0;font-weight:700;}
+.hoje .estado{font-size:28px;font-weight:800;letter-spacing:-.02em;}
+.hoje .hora{font-size:20px;font-weight:700;color:var(--amber);font-variant-numeric:tabular-nums;}
+.hoje .int{font-size:14px;color:#DADDF5;}
+.hoje .prox{margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.18);font-size:14px;color:#DADDF5;}
+.hoje .prox b{color:#fff;}
+
+/* mês */
+.mesnav{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.mesnav h2{margin:0;font-size:18px;}
+.mesnav h2::first-letter,.detalhe h3::first-letter{text-transform:uppercase;}
+.mesnav button{width:42px;height:42px;border-radius:12px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-size:20px;cursor:pointer;}
+.mesnav button:disabled{opacity:.3;cursor:default;}
+.resumo{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.pill{background:var(--bg);border-radius:999px;padding:6px 11px;font-size:13px;color:var(--ink-soft);}
+.pill b{color:var(--ink);font-variant-numeric:tabular-nums;}
+.info{margin-top:10px;font-size:13.5px;line-height:1.55;color:var(--ink-soft);}
+.info b{color:var(--ink);}
+
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:12px;}
+.cal .dsem{font-size:11px;font-weight:700;text-align:center;color:var(--ink-soft);padding-bottom:2px;}
+.cal .dsem.dom{color:var(--dom);}
+.dia{aspect-ratio:1/1.08;max-width:100%;border-radius:10px;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;padding:0;font-weight:800;}
+.dia .n{font-size:15px;font-variant-numeric:tabular-nums;}
+.dia .c{font-size:10px;font-weight:700;opacity:.85;}
+.dia.T,.dia.D{background:var(--trab);color:var(--trab-ink);}
+.dia.N{background:var(--noite);color:var(--noite-ink);}
+.dia.C{background:var(--caixa);color:#fff;}
+.dia.F{background:var(--folga);color:var(--folga-ink);}
+.dia.V{background:var(--ferias);color:var(--ferias-ink);}
+.dia.hj{border-color:var(--amber);box-shadow:0 0 0 2px var(--amber);}
+.dia.sel{outline:3px solid var(--ink);outline-offset:1px;}
+.dia:focus-visible{outline:3px solid var(--amber);}
+.legenda{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:12px;color:var(--ink-soft);}
+.legenda span{display:inline-flex;align-items:center;gap:5px;}
+.legenda i{width:14px;height:14px;border-radius:4px;display:inline-block;}
+
+.detalhe h3{margin:0 0 6px;font-size:16px;}
+.detalhe .estado{font-size:20px;font-weight:800;}
+.detalhe .linha{font-size:15px;margin-top:4px;color:var(--ink-soft);}
+.detalhe .linha b{color:var(--ink);font-variant-numeric:tabular-nums;}
+
+.rodape{font-size:12.5px;color:var(--ink-soft);text-align:center;line-height:1.6;}
+.aviso{background:var(--amber-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.45;}
+.vazio{text-align:center;color:var(--ink-soft);line-height:1.6;}
+.carregando{text-align:center;color:var(--ink-soft);padding:30px 0;}
+@media (prefers-reduced-motion: no-preference){ .dia{transition:transform .12s;} .dia:active{transform:scale(.94);} }
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <div class="linha">
+    <div class="logo" aria-hidden="true">⛽</div>
+    <div>
+      <h1 id="t-nome">Minha escala</h1>
+      <p id="t-sub">Posto Trevo</p>
+    </div>
+    <button class="sair" id="btn-sair" hidden>Sair</button>
+  </div>
+</header>
+
+<main id="app">
+  <div class="carregando">Carregando…</div>
+</main>
+
+<script>
+// =====================================================================
+// MINHA ESCALA · Posto Trevo (app do colaborador, somente visualização)
+// Cole abaixo o endereço da implantação do Apps Script (termina em /exec).
+// =====================================================================
+const API = 'https://script.google.com/macros/s/AKfycbzzPr5PBpuJ2PmRsoqnoCfJtZSJvuMS1iVuUHX4K41J-J1DXbS1fwpHrA2WGxg8aQp_/exec';
+
+const K_SESSAO = 'minha-escala-sessao', K_CACHE = 'minha-escala-cache';
+const DIAS = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const DSEM = ['D','S','T','Q','Q','S','S'];
+let sessao = ler(K_SESSAO) || null;   // { token, nome, setor }
+let atual = null;                      // resposta da escala do mês aberto
+let diaSel = null;
+
+function ler(k){ try{ return JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){ return null; } }
+function gravar(k, v){ try{ v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+const app = () => document.getElementById('app');
+const nomeMes = mes => { const [y,m] = mes.split('-').map(Number); return new Date(y, m-1, 1).toLocaleDateString('pt-BR', { month:'long', year:'numeric' }); };
+const hojeIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
+const primeiroNome = n => String(n||'').split(' ')[0].toLowerCase().replace(/^./, c => c.toUpperCase());
+
+async function api(acao, dados){
+  if(!/^https?:\/\//.test(API)) throw new Error('O endereço do servidor ainda não foi configurado neste app.');
+  const r = await fetch(API, { method:'POST', body: JSON.stringify({ acao, ...(dados||{}) }) });
+  if(!r.ok) throw new Error('Servidor indisponível (' + r.status + ').');
+  return r.json();
+}
+
+// ---------- login ----------
+async function telaLogin(msg){
+  document.getElementById('btn-sair').hidden = true;
+  document.getElementById('t-nome').textContent = 'Minha escala';
+  document.getElementById('t-sub').textContent = 'Posto Trevo';
+  app().innerHTML = `
+    <form class="card login" id="f-login">
+      <h2>Entrar</h2>
+      <p>Escolha o seu nome e digite o PIN que a gerência entregou.</p>
+      ${msg ? `<p class="erro">${esc(msg)}</p>` : ''}
+      <div class="campo"><label for="l-nome">Seu nome</label>
+        <select id="l-nome" required><option value="">Carregando nomes…</option></select></div>
+      <div class="campo"><label for="l-pin">PIN</label>
+        <input id="l-pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="8" required placeholder="••••••"></div>
+      <button class="btn" type="submit" id="l-btn">Ver minha escala</button>
+      <div class="dica">Esqueceu o PIN? Peça um novo à gerência.</div>
+    </form>`;
+  try{
+    const r = await api('nomes');
+    const sel = document.getElementById('l-nome');
+    if(!r.ok || !r.nomes.length){ sel.innerHTML = '<option value="">Nenhum colaborador liberado ainda</option>'; return; }
+    sel.innerHTML = '<option value="">Toque para escolher</option>' + r.nomes.map(n=>`<option value="${esc(n.id)}">${esc(n.nome)}</option>`).join('');
+  }catch(e){
+    document.getElementById('l-nome').innerHTML = '<option value="">Sem conexão</option>';
+    const p = document.querySelector('.login p'); p.className = 'erro'; p.textContent = e.message;
+  }
+}
+async function entrar(ev){
+  ev.preventDefault();
+  const btn = document.getElementById('l-btn');
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  try{
+    const r = await api('loginColab', { id: document.getElementById('l-nome').value, pin: document.getElementById('l-pin').value });
+    if(!r.ok){ return telaLogin(r.erro); }
+    sessao = { token: r.token, nome: r.nome, setor: r.setor };
+    gravar(K_SESSAO, sessao);
+    carregarMes();
+  }catch(e){ telaLogin(e.message); }
+}
+function sair(){ sessao = null; atual = null; gravar(K_SESSAO, null); gravar(K_CACHE, null); telaLogin(); }
+
+// ---------- escala ----------
+async function carregarMes(mes){
+  document.getElementById('btn-sair').hidden = false;
+  document.getElementById('t-nome').textContent = sessao.nome ? primeiroNome(sessao.nome) : 'Minha escala';
+  document.getElementById('t-sub').textContent = (sessao.setor==='caixas' ? 'Caixa' : 'Pista') + ' · Posto Trevo';
+  if(!atual) app().innerHTML = '<div class="carregando">Carregando a sua escala…</div>';
+  const cache = ler(K_CACHE) || {};
+  try{
+    const r = await api('minhaEscala', { token: sessao.token, mes: mes || '' });
+    if(!r.ok){ if(r.sair){ gravar(K_SESSAO, null); gravar(K_CACHE, null); sessao = null; return telaLogin(r.erro); } throw new Error(r.erro); }
+    atual = { ...r, offline:false };
+    if(r.mes){ cache[r.mes] = r; cache.ultimo = r.mes; gravar(K_CACHE, cache); }
+  }catch(e){
+    const guardado = cache[mes || cache.ultimo];
+    if(!guardado){ app().innerHTML = `<div class="card vazio">Não consegui baixar a escala.<br>${esc(e.message)}<br><br><button class="btn" id="btn-tentar">Tentar de novo</button></div>`; return; }
+    atual = { ...guardado, offline:true };
+  }
+  diaSel = null;
+  telaEscala();
+}
+
+function codigoCurto(s){ return { T:'T', D:'D', N:'N', C:'C', F:'F', V:'FÉ' }[s] || s; }
+function trabalha(s){ return s==='T' || s==='D' || s==='N' || s==='C'; }
+
+function telaEscala(){
+  const r = atual;
+  if(!r.mes || !r.dados){
+    app().innerHTML = `<div class="card vazio">A gerência ainda não publicou a sua escala.<br>Volte mais tarde.</div>`;
+    return;
+  }
+  const d = r.dados, dias = d.dias, [y, m] = r.mes.split('-').map(Number);
+  const hoje = new Date(), noMes = hoje.getFullYear()===y && hoje.getMonth()+1===m;
+  const nHoje = hoje.getDate();
+  const iMes = r.meses.indexOf(r.mes);
+
+  // cartão de hoje (ou do primeiro dia, se o mês não é o atual)
+  let cartao = '';
+  if(noMes){
+    const h = dias.find(x=>x.d===nHoje);
+    const prox = dias.filter(x=> x.d > nHoje);
+    const proxFolga = prox.find(x=> x.s==='F'), proxTrab = prox.find(x=> trabalha(x.s));
+    const proxTxt = h && trabalha(h.s)
+      ? (proxFolga ? `Próxima folga: <b>${DIAS[proxFolga.w]}, ${proxFolga.d}</b>` : '')
+      : (proxTrab ? `Volta a trabalhar: <b>${DIAS[proxTrab.w]}, ${proxTrab.d}</b>${proxTrab.h ? ' · ' + esc(proxTrab.h) : ''}` : '');
+    cartao = `<section class="card hoje" aria-label="Hoje">
+      <div class="rot">Hoje · ${DIAS[hoje.getDay()]}, ${nHoje}</div>
+      <div class="estado">${esc(h ? h.txt : '—')}</div>
+      ${h && h.h ? `<div class="hora">${esc(h.h)}</div>` : ''}
+      ${h && h.i ? `<div class="int">Intervalo: ${esc(h.i)}</div>` : ''}
+      ${proxTxt ? `<div class="prox">${proxTxt}</div>` : ''}
+    </section>`;
+  }
+
+  const nTrab = dias.filter(x=>trabalha(x.s)).length, nFolga = dias.filter(x=>x.s==='F').length;
+  const vazios = (dias[0].w);
+  let cal = DSEM.map((l,i)=>`<div class="dsem ${i===0?'dom':''}">${l}</div>`).join('');
+  for(let i=0;i<vazios;i++) cal += '<div></div>';
+  dias.forEach(x=>{
+    cal += `<button class="dia ${x.s} ${noMes && x.d===nHoje ? 'hj' : ''} ${diaSel===x.d ? 'sel' : ''}" data-dia="${x.d}" aria-label="${DIAS[x.w]}, ${x.d}: ${esc(x.txt)}${x.h ? ', ' + esc(x.h) : ''}">
+      <span class="n">${x.d}</span><span class="c">${codigoCurto(x.s)}</span></button>`;
+  });
+
+  const sel = diaSel ? dias.find(x=>x.d===diaSel) : null;
+  const detalhe = sel ? `<section class="card detalhe" aria-live="polite">
+      <h3>${DIAS[sel.w]}, ${sel.d} de ${new Date(y, m-1, 1).toLocaleDateString('pt-BR',{month:'long'})}</h3>
+      <div class="estado">${esc(sel.txt)}</div>
+      ${sel.h ? `<div class="linha">Horário: <b>${esc(sel.h)}</b></div>` : ''}
+      ${sel.i ? `<div class="linha">Intervalo: <b>${esc(sel.i)}</b></div>` : ''}
+    </section>` : '';
+
+  const temN = dias.some(x=>x.s==='N'), temC = dias.some(x=>x.s==='C'), temV = dias.some(x=>x.s==='V'), temD = dias.some(x=>x.s==='D');
+  app().innerHTML = `
+    ${r.offline ? '<div class="aviso">Sem internet. Mostrando a última versão baixada.</div>' : ''}
+    ${cartao}
+    <section class="card">
+      <div class="mesnav">
+        <button id="m-ant" aria-label="Mês anterior" ${iMes<=0?'disabled':''}>‹</button>
+        <h2>${esc(nomeMes(r.mes))}</h2>
+        <button id="m-prox" aria-label="Próximo mês" ${iMes<0 || iMes>=r.meses.length-1?'disabled':''}>›</button>
+      </div>
+      <div class="resumo">
+        <span class="pill"><b>${nTrab}</b> dias de trabalho</span>
+        <span class="pill"><b>${nFolga}</b> folgas</span>
+        <span class="pill"><b>${esc(d.domingosFolga)}</b> domingo${d.domingosFolga==1?'':'s'} de folga</span>
+      </div>
+      <div class="info">
+        Horário: <b>${esc(d.horario)}</b>${d.intervalo ? ` · Intervalo: <b>${esc(d.intervalo)}</b>` : ''}<br>
+        ${esc(d.info || '')}${d.modelo ? ' · escala ' + esc(d.modelo) : ''}
+      </div>
+      <div class="cal" role="group" aria-label="Dias do mês">${cal}</div>
+      <div class="legenda">
+        <span><i style="background:var(--trab)"></i>Trabalha</span>
+        <span><i style="background:var(--folga)"></i>Folga</span>
+        ${temN ? '<span><i style="background:var(--noite)"></i>Noite</span>' : ''}
+        ${temC ? '<span><i style="background:var(--caixa)"></i>Caixa à noite</span>' : ''}
+        ${temD ? '<span>D = plantão de 12h</span>' : ''}
+        ${temV ? '<span><i style="background:var(--ferias)"></i>Férias</span>' : ''}
+      </div>
+    </section>
+    ${detalhe || '<div class="rodape">Toque em um dia para ver o horário.</div>'}
+    <div class="rodape">Publicado pela gerência${r.publicadoEm ? ' em ' + esc(new Date(r.publicadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})) : ''}.<br>Dúvidas sobre a escala? Fale com a gerência.</div>`;
+}
+
+document.addEventListener('submit', ev=>{ if(ev.target.id==='f-login') entrar(ev); });
+document.addEventListener('click', ev=>{
+  const b = ev.target.closest('button'); if(!b) return;
+  if(b.id==='btn-sair') return sair();
+  if(b.id==='btn-tentar') return carregarMes();
+  if(b.dataset.dia){ diaSel = Number(b.dataset.dia); telaEscala(); return; }
+  if(b.id==='m-ant' || b.id==='m-prox'){
+    const i = atual.meses.indexOf(atual.mes) + (b.id==='m-ant' ? -1 : 1);
+    if(atual.meses[i]) carregarMes(atual.meses[i]);
+  }
+});
+// atualiza ao voltar para o app
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && sessao && atual) carregarMes(atual.mes); });
+
+if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+sessao ? carregarMes() : telaLogin();
+</script>
+</body>
+</html>
