@@ -166,6 +166,16 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .pin-grande{font-size:34px;font-weight:800;letter-spacing:.18em;text-align:center;padding:14px;border:2px dashed var(--amber);border-radius:10px;background:#FFFBEB;color:var(--indigo-950);font-variant-numeric:tabular-nums;user-select:all;}
 .nv-msg{font-size:12.5px;line-height:1.5;color:var(--ink-soft);}
 .nv-msg.erro{color:var(--low);font-weight:600;} .nv-msg.ok{color:#166534;font-weight:600;}
+.rel-saida{display:flex;flex-direction:column;gap:14px;max-height:55vh;overflow:auto;border-top:1px solid var(--rule);padding-top:12px;}
+.rel-saida:empty{display:none;}
+.rel-dia h4{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between;gap:8px;color:var(--indigo-950);}
+.rel-dia h4 span{font-weight:500;font-size:12px;color:var(--ink-soft);}
+.rel-sub{margin:8px 0 4px;font-size:12.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
+.rel-tab{width:100%;border-collapse:collapse;font-size:12.5px;}
+.rel-tab th{background:var(--indigo-950);color:#fff;text-align:left;padding:6px 8px;font-size:11.5px;}
+.rel-tab td{padding:6px 8px;border-bottom:1px solid var(--rule);}
+.rel-tab tr:nth-child(even) td{background:#F6F7FB;}
+.rel-tab td.rel-h{font-weight:700;background:var(--amber-soft) !important;color:#78350F;white-space:nowrap;font-variant-numeric:tabular-nums;}
 .modal-actions{display:flex;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--rule);}
 .modal-actions div{display:flex;gap:8px;}
 
@@ -213,6 +223,7 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
     <div class="top-actions">
       <button class="btn btn-nuvem" id="btn-nuvem" title="Salvar na nuvem, publicar e gerenciar acessos"><span class="nv-dot" id="nv-dot"></span><span id="nv-txt">Nuvem: desconectado</span></button>
       <button class="btn btn-dark" id="btn-novo">+ Novo funcionário</button>
+      <button class="btn btn-dark" id="btn-rel">Relatórios</button>
       <button class="btn btn-dark" id="btn-xlsx">Exportar Excel</button>
       <button class="btn btn-dark" id="btn-pdf">Exportar PDF</button>
       <button class="btn btn-amber" id="btn-print">Imprimir escala</button>
@@ -1909,6 +1920,205 @@ document.addEventListener('click', async ev=>{
       catch(e){ const r = document.createRange(); r.selectNodeContents(document.getElementById('nv-pin')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); el.textContent = 'Selecionado: copie com Ctrl+C'; }
     }
   }catch(e){ alert(e.message || 'Não consegui falar com o servidor.'); }
+});
+
+// =====================================================================
+// RELATÓRIOS ordenados por horário
+// =====================================================================
+const ORDENS = { entrada:'Horário de entrada', saida:'Horário de saída', intervalo:'Horário do intervalo', nome:'Nome' };
+let relUltimo = null; // último relatório montado (para o PDF)
+
+function hojeIsoDia(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// minutos para ordenar; quem não tem horário vai para o fim
+function chaveOrdem(linha, ordem){
+  if(ordem==='nome') return linha.nome;
+  const txt = ordem==='saida' ? (linha.horario ? partesTurno(linha.horario)[1] : '') : ordem==='intervalo' ? (linha.intervalo || '').slice(0,5) : (linha.horario ? partesTurno(linha.horario)[0] : '');
+  // o dia do posto começa às 04:00: madrugada (00:00 a 03:59) fica no fim da lista
+  return /^\d{2}:\d{2}/.test(txt) ? mod(minutos(txt) - 240, 1440) : 99999;
+}
+function ordenarLinhas(linhas, ordem){
+  return linhas.sort((a,b)=>{
+    const ka = chaveOrdem(a, ordem), kb = chaveOrdem(b, ordem);
+    if(ka < kb) return -1; if(ka > kb) return 1;
+    return a.nome.localeCompare(b.nome);
+  });
+}
+function filtrarSetor(lista, setor){ return setor==='todos' ? lista : lista.filter(e=>e.setor===setor); }
+
+// Escala por dia: para cada data, quem trabalha (ordenado) e quem está de folga ou de férias
+function montarRelDias(de, ate, setor, ordem, separar){
+  const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  const gCache = {};
+  const dias = [];
+  for(let t = fromIso(de); t <= fromIso(ate); t += DAY){
+    const mes = toIso(t).slice(0,7);
+    const g = gCache[mes] || (gCache[mes] = gerar(mes));
+    const trab = [], fora = [];
+    filtrarSetor(state.employees, setor).forEach(e=>{
+      const it = intervaloDe(e, d12, autoI);
+      const d = descreverDia(e, valor(g, e.id, t), t, d12, it);
+      const linha = { nome:e.nome, setor:e.setor, situacao:d.txt, horario:d.h, intervalo:d.i || (it && it.indenizado && d.h ? 'Indenizado' : ''), codigo:d.s };
+      (d.s==='F' || d.s==='V' ? fora : trab).push(linha);
+    });
+    const grupos = separar && setor==='todos'
+      ? ['pista','caixas'].map(st=>({ titulo: SETORES[st], linhas: ordenarLinhas(trab.filter(l=>l.setor===st), ordem) })).filter(x=>x.linhas.length)
+      : [{ titulo:'', linhas: ordenarLinhas(trab, ordem) }];
+    dias.push({ t, grupos, fora: fora.sort((a,b)=>a.nome.localeCompare(b.nome)), total: trab.length });
+  }
+  return { tipo:'dias', de, ate, setor, ordem, dias };
+}
+// Quadro de horários: horário e intervalo fixos de cada um
+function montarRelQuadro(setor, ordem, separar){
+  const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  const linhas = filtrarSetor(state.employees, setor).map(e=>{
+    const it = intervaloDe(e, d12, autoI);
+    return { nome:e.nome, setor:e.setor, horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? 'Indenizado' : it.ini + ' às ' + it.fim) : '', situacao: infoEscala(e, d12, ui.mes) };
+  });
+  const grupos = separar && setor==='todos'
+    ? ['pista','caixas'].map(st=>({ titulo: SETORES[st], linhas: ordenarLinhas(linhas.filter(l=>l.setor===st), ordem) })).filter(x=>x.linhas.length)
+    : [{ titulo:'', linhas: ordenarLinhas(linhas, ordem) }];
+  return { tipo:'quadro', setor, ordem, grupos };
+}
+
+function tituloData(t){ const d = new Date(t); return ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][d.getUTCDay()] + ', ' + ddmm(t) + '/' + d.getUTCFullYear(); }
+
+function htmlTabelaRel(linhas, comSetor){
+  if(!linhas.length) return '<div class="nv-msg">Ninguém trabalhando.</div>';
+  return `<div style="overflow-x:auto;"><table class="rel-tab"><thead><tr><th>#</th><th>Funcionário</th>${comSetor?'<th>Setor</th>':''}<th>Horário</th><th>Intervalo</th><th>Situação</th></tr></thead><tbody>${
+    linhas.map((l,i)=>`<tr><td>${i+1}</td><td><b>${esc(l.nome)}</b></td>${comSetor?`<td>${l.setor==='pista'?'Pista':'Caixa'}</td>`:''}<td class="rel-h">${esc(l.horario||'—')}</td><td>${esc(l.intervalo||'—')}</td><td>${esc(l.situacao||'')}</td></tr>`).join('')
+  }</tbody></table></div>`;
+}
+function htmlRelatorio(r){
+  const comSetor = r.setor==='todos';
+  if(r.tipo==='quadro'){
+    return r.grupos.map(gp=>`${gp.titulo?`<h4 class="rel-sub">${esc(gp.titulo)}</h4>`:''}${htmlTabelaRel(gp.linhas, comSetor && !gp.titulo)}`).join('');
+  }
+  return r.dias.map(d=>`
+    <div class="rel-dia">
+      <h4>${tituloData(d.t)} <span>${d.total} trabalhando</span></h4>
+      ${d.grupos.map(gp=>`${gp.titulo?`<h5 class="rel-sub">${esc(gp.titulo)}</h5>`:''}${htmlTabelaRel(gp.linhas, comSetor && !gp.titulo)}`).join('')}
+      ${d.fora.length ? `<div class="nv-msg" style="margin-top:6px;"><b>De folga:</b> ${d.fora.map(f=>esc(f.nome.split(' ').slice(0,2).join(' ')) + (f.codigo==='V'?' (férias)':'')).join(', ')}</div>` : ''}
+    </div>`).join('');
+}
+
+function abrirRelatorios(){
+  const hoje = hojeIsoDia();
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true" style="max-width:860px;">
+      <div class="modal-head"><h3>Relatórios por horário</h3><button type="button" id="m-fechar" aria-label="Fechar">×</button></div>
+      <form id="rel-form" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+        <div class="row2">
+          <div class="field"><label for="rel-tipo">Relatório</label>
+            <select id="rel-tipo">
+              <option value="dias">Escala por dia (quem trabalha em cada dia)</option>
+              <option value="quadro">Quadro de horários (horário fixo de cada um)</option>
+            </select></div>
+          <div class="field"><label for="rel-ordem">Ordenar por</label>
+            <select id="rel-ordem">${Object.entries(ORDENS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+        </div>
+        <div class="row2" id="rel-datas">
+          <div class="field"><label for="rel-de">Do dia</label><input type="date" id="rel-de" value="${hoje}" required></div>
+          <div class="field"><label for="rel-ate">Até o dia</label><input type="date" id="rel-ate" value="${hoje}" required></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="rel-setor">Setor</label>
+            <select id="rel-setor"><option value="todos">Pista e caixas</option><option value="pista">Só pista</option><option value="caixas">Só caixas</option></select></div>
+          <label class="check" style="align-self:end;padding-bottom:10px;"><input type="checkbox" id="rel-separar" checked> Separar pista e caixas</label>
+        </div>
+        <div class="nv-msg">Escala usada: <b>${modelo12() ? '12x36' : '5x2'}</b> (a que está aberta agora).</div>
+        <div class="modal-actions">
+          <span></span>
+          <div><button type="submit" class="btn btn-dark">Ver na tela</button> <button type="button" class="btn btn-amber" id="rel-pdf">Gerar PDF</button></div>
+        </div>
+        <div id="rel-saida" class="rel-saida"></div>
+      </form>
+    </div>
+  </div>`;
+  verRelatorio();
+}
+function lerRelForm(){
+  const tipo = document.getElementById('rel-tipo').value;
+  document.getElementById('rel-datas').hidden = tipo !== 'dias';
+  const setor = document.getElementById('rel-setor').value, ordem = document.getElementById('rel-ordem').value;
+  const separar = document.getElementById('rel-separar').checked;
+  if(tipo==='quadro') return montarRelQuadro(setor, ordem, separar);
+  let de = document.getElementById('rel-de').value, ate = document.getElementById('rel-ate').value;
+  if(!de) de = hojeIsoDia(); if(!ate || ate < de) ate = de;
+  if((fromIso(ate) - fromIso(de)) / DAY > 61){ ate = toIso(fromIso(de) + 61*DAY); document.getElementById('rel-ate').value = ate; }
+  return montarRelDias(de, ate, setor, ordem, separar);
+}
+function verRelatorio(){
+  relUltimo = lerRelForm();
+  document.getElementById('rel-saida').innerHTML = htmlRelatorio(relUltimo);
+}
+
+function pdfRelatorio(){
+  const r = relUltimo || lerRelForm();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const titulo = r.tipo==='quadro' ? 'QUADRO DE HORÁRIOS' : 'ESCALA POR DIA';
+  const sub = (r.setor==='todos' ? 'Pista e caixas' : SETORES[r.setor]) + ' · escala ' + (modelo12() ? '12x36' : '5x2') + ' · ordenado por ' + ORDENS[r.ordem].toLowerCase()
+    + (r.tipo==='dias' ? ' · ' + ddmm(fromIso(r.de)) + (r.de!==r.ate ? ' a ' + ddmm(fromIso(r.ate)) : '') : '');
+  const cabecalho = () => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,27,75);
+    doc.text('POSTO TREVO · ' + titulo, 10, 12);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(94,102,128);
+    doc.text(sub, 10, 17.5);
+    doc.text('Gerado em ' + new Date().toLocaleDateString('pt-BR'), 200, 12, { align:'right' });
+  };
+  cabecalho();
+  let y = 23;
+  const tabela = (linhas, rotulo, comSetor) => {
+    if(rotulo){
+      if(y > 270){ doc.addPage(); cabecalho(); y = 23; }
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(30,27,75); doc.text(rotulo, 10, y + 4); y += 6;
+    }
+    if(!linhas.length){ doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(94,102,128); doc.text('Ninguém trabalhando.', 10, y + 4); y += 8; return; }
+    const head = [['#','Funcionário', ...(comSetor?['Setor']:[]), 'Horário', 'Intervalo', 'Situação']];
+    const body = linhas.map((l,i)=>[String(i+1), l.nome, ...(comSetor?[l.setor==='pista'?'Pista':'Caixa']:[]), l.horario||'—', l.intervalo||'—', l.situacao||'']);
+    const colH = comSetor ? 3 : 2;
+    doc.autoTable({
+      startY: y, head, body, theme:'grid',
+      margin:{ left:10, right:10, top:22 },
+      styles:{ fontSize:8.6, cellPadding:1.4, lineColor:[150,156,175], lineWidth:0.2, textColor:[27,32,51], valign:'middle' },
+      headStyles:{ fillColor:[30,27,75], textColor:255, fontStyle:'bold' },
+      alternateRowStyles:{ fillColor:[240,242,248] },
+      columnStyles:{ 0:{ cellWidth:8, halign:'center' }, 1:{ fontStyle:'bold' }, [colH]:{ cellWidth:30, halign:'center', fontStyle:'bold', fillColor:[254,243,199], textColor:[120,53,15] }, [colH+1]:{ cellWidth:28, halign:'center' } },
+      didDrawPage: d => { if(d.pageNumber > 1) cabecalho(); }, // página nova criada pela tabela
+    });
+    y = doc.lastAutoTable.finalY + 4;
+  };
+  if(r.tipo==='quadro'){
+    r.grupos.forEach(gp=> tabela(gp.linhas, gp.titulo, r.setor==='todos' && !gp.titulo));
+  } else {
+    r.dias.forEach((d, i)=>{
+      if(i > 0 && y > 200){ doc.addPage(); cabecalho(); y = 23; }
+      doc.setDrawColor(30,27,75); doc.setLineWidth(0.6); doc.line(10, y, 200, y); y += 2;
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(30,27,75);
+      doc.text(tituloData(d.t), 10, y + 5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(94,102,128);
+      doc.text(d.total + ' trabalhando', 200, y + 5, { align:'right' }); y += 8;
+      d.grupos.forEach(gp=> tabela(gp.linhas, gp.titulo, r.setor==='todos' && !gp.titulo));
+      if(d.fora.length){
+        doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(94,102,128);
+        const txt = doc.splitTextToSize('De folga: ' + d.fora.map(f=>f.nome.split(' ').slice(0,2).join(' ') + (f.codigo==='V'?' (férias)':'')).join(', '), 190);
+        if(y + txt.length*4 > 285){ doc.addPage(); cabecalho(); y = 23; }
+        doc.text(txt, 10, y + 3); y += txt.length * 4 + 4;
+      }
+      y += 2;
+    });
+  }
+  const nome = r.tipo==='quadro' ? 'quadro-de-horarios.pdf' : ('escala-por-dia-' + r.de + (r.de!==r.ate ? '_a_' + r.ate : '') + '.pdf');
+  doc.save(nome);
+}
+
+document.addEventListener('submit', ev=>{ if(ev.target.id==='rel-form'){ ev.preventDefault(); verRelatorio(); } });
+document.addEventListener('change', ev=>{ if(ev.target.id && ev.target.id.startsWith('rel-')) verRelatorio(); });
+document.addEventListener('click', ev=>{
+  const b = ev.target.closest('button'); if(!b) return;
+  if(b.id==='btn-rel') abrirRelatorios();
+  if(b.id==='rel-pdf'){ verRelatorio(); pdfRelatorio(); }
 });
 
 carregar();
