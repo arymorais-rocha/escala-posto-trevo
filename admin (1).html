@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escala · Posto Trevo (gestão)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* Layout: barra do posto em cima, controles, avisos, grade do mês (funcionário x dia) com cobertura no rodapé */
+:root{
+  --indigo-950:#1E1B4B;
+  --indigo-900:#312E81;
+  --indigo-700:#4338CA;
+  --indigo-50:#EEF0FB;
+  --amber:#FBBF24;
+  --amber-soft:#FEF3C7;
+  --bg:#F1F3F8;
+  --surface:#FFFFFF;
+  --ink:#1B2033;
+  --ink-soft:#5E6680;
+  --rule:#DFE3EE;
+  --trab:#E3F4EA; --trab-ink:#1F7A47;
+  --folga:#FBE3E6; --folga-ink:#B42335;
+  --ferias:#FDF0D5; --ferias-ink:#9A5B0A;
+  --low:#B42335;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box;}
+[hidden]{display:none !important;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased;}
+button,input,select{font-family:inherit;}
+
+.topbar{background:var(--indigo-900);color:#fff;}
+.topbar .inner{max-width:1400px;margin:0 auto;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand .logo{width:42px;height:42px;border-radius:10px;background:var(--amber);color:var(--indigo-950);display:grid;place-items:center;font-weight:800;font-size:20px;}
+.brand h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em;}
+.brand p{margin:2px 0 0;font-size:12px;color:#C7CBF0;}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;}
+.btn-amber{background:var(--amber);color:var(--indigo-950);}
+.btn-amber:hover{background:#FCD34D;}
+.btn-dark{background:var(--indigo-700);color:#fff;}
+.btn-dark:hover{background:#4F46E5;}
+.btn-light{background:#fff;color:var(--ink-soft);border:1px solid var(--rule);}
+.btn-light:hover{color:var(--ink);border-color:var(--ink-soft);}
+.btn-danger{background:#fff;color:var(--low);border:1px solid #F2B8C0;}
+.btn:focus-visible,.cel:focus-visible,.emp-btn:focus-visible{outline:2px solid var(--indigo-700);outline-offset:2px;}
+
+main{max-width:1400px;margin:0 auto;padding:18px 20px 60px;display:flex;flex-direction:column;gap:14px;}
+
+.controls{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;}
+.tabs{display:flex;background:var(--bg);border:1px solid var(--rule);border-radius:9px;padding:3px;}
+.tabs button{border:none;background:none;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:700;color:var(--ink-soft);cursor:pointer;}
+.tabs button.on{background:var(--indigo-700);color:#fff;}
+.ctl-group{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.ctl-group label{font-size:12px;font-weight:600;color:var(--ink-soft);display:flex;align-items:center;gap:6px;}
+.ctl-group input{border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;}
+
+.summary{display:flex;gap:10px;flex-wrap:wrap;}
+.pill{background:var(--surface);border:1px solid var(--rule);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--ink-soft);}
+.pill b{color:var(--ink);font-variant-numeric:tabular-nums;}
+.pill.ok b{color:var(--trab-ink);}
+.pill.bad{border-color:#F2B8C0;background:#FFF5F6;}
+.pill.bad b{color:var(--low);}
+
+.alerts{background:#FFF8EC;border:1px solid #F3D9A6;border-radius:12px;padding:12px 16px;font-size:12.5px;line-height:1.5;color:#6B4206;}
+.alerts h3{margin:0 0 6px;font-size:13px;}
+.alerts ul{margin:0;padding-left:18px;}
+.alerts.ok{background:#EEF8F2;border-color:#BFE3CD;color:#1F5C38;}
+
+.sheet{background:var(--surface);border:1px solid var(--rule);border-radius:12px;overflow:hidden;}
+.sheet-head{padding:12px 16px;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.sheet-head h2{margin:0;font-size:16px;}
+.sheet-head h2::first-letter{text-transform:uppercase;}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;}
+.legend span{display:inline-flex;align-items:center;gap:5px;}
+.legend i{width:16px;height:16px;border-radius:4px;display:inline-grid;place-items:center;font-style:normal;font-size:10px;font-weight:700;}
+.tablewrap{overflow-x:auto;}
+table{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100%;}
+th,td{border-bottom:1px solid var(--rule);padding:0;}
+thead th{background:#F6F7FB;font-weight:600;color:var(--ink-soft);padding:6px 2px;text-align:center;min-width:30px;position:sticky;top:0;}
+thead th span{display:block;font-size:10px;}
+thead th b{display:block;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;}
+th.dom,td.dom{background:var(--indigo-50);}
+thead th.dom b{color:var(--indigo-700);}
+th.seg,td.seg{border-left:2px solid #C9CEE3;}
+.nome{position:sticky;left:0;z-index:2;background:var(--surface);min-width:230px;max-width:260px;text-align:left;padding:7px 10px;border-right:1px solid var(--rule);}
+thead .nome{z-index:3;background:#F6F7FB;}
+.emp-btn{background:none;border:none;padding:0;font-weight:700;font-size:12px;color:var(--ink);cursor:pointer;text-align:left;line-height:1.25;}
+.emp-btn:hover{color:var(--indigo-700);text-decoration:underline;}
+.meta{font-size:10.5px;color:var(--ink-soft);margin-top:2px;}
+.tag{display:inline-block;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;vertical-align:1px;}
+.tag-a{background:#E0E7FF;color:#3730A3;}
+.tag-b{background:#DCFCE7;color:#166534;}
+.tag-c{background:#FCE7F3;color:#9D174D;}
+.tag-fixa{background:var(--amber-soft);color:#92400E;}
+.warn{font-size:10.5px;color:var(--low);font-weight:600;margin-top:3px;cursor:help;}
+td.c{text-align:center;padding:3px 2px;}
+.cel{width:26px;height:24px;border-radius:5px;border:1px solid transparent;font-size:11px;font-weight:700;cursor:pointer;position:relative;}
+.cel.T{background:var(--trab);color:var(--trab-ink);}
+.cel.F{background:var(--folga);color:var(--folga-ink);border-color:#F2B8C0;}
+.cel.V{background:var(--ferias);color:var(--ferias-ink);cursor:default;font-size:9px;}
+.cel.N{background:var(--indigo-900);color:#fff;}
+.cel.D{background:#0E7490;color:#fff;}
+.cel.C{background:#B45309;color:#fff;}
+.tag-caixa{background:#B45309;color:#fff;}
+.revez{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;}
+.revez h3{margin:0;font-size:13.5px;}
+.revez .turmas{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
+.revez .turma{border:1px solid var(--rule);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;}
+.revez .turma b{font-size:12px;}
+.revez .turma label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-soft);}
+.revez select{border:1px solid var(--rule);border-radius:6px;padding:5px 7px;font-size:12px;background:#FAFBFD;max-width:200px;}
+.revez .fds{color:var(--ink-soft);line-height:1.5;}
+.revez .erro{color:var(--low);font-weight:600;}
+.tag-noite{background:var(--indigo-900);color:#fff;}
+.tag-turma{border:1px solid currentColor;cursor:pointer;font-family:inherit;}
+.tag-turma-A{background:#ECFDF5;color:#047857;}
+.tag-turma-B{background:#FFF7ED;color:#C2410C;}
+.tag-turma:hover{filter:brightness(.95);text-decoration:underline;}
+.cel.ov::after{content:"";position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:var(--indigo-700);}
+td.domf{text-align:center;font-weight:700;font-variant-numeric:tabular-nums;min-width:58px;}
+td.domf.zero{color:var(--low);}
+tr.grp td{background:#FAFBFD;font-size:10.5px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;}
+tr.grp td.nome{background:#FAFBFD;}
+tfoot td{background:#F6F7FB;}
+tfoot td.nome{background:#F6F7FB;font-size:11.5px;font-weight:600;}
+tfoot td.c{font-weight:700;font-variant-numeric:tabular-nums;font-size:12px;padding:6px 2px;}
+tfoot td.c.low{background:#FBE3E6;color:var(--low);}
+tfoot .min{width:44px;border:1px solid var(--rule);border-radius:5px;padding:3px 4px;font-size:11.5px;margin-left:6px;}
+tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.empty{padding:40px;text-align:center;color:var(--ink-soft);}
+
+.rules{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 18px;font-size:12.5px;color:var(--ink-soft);line-height:1.55;}
+.rules h3{margin:0 0 6px;font-size:13px;color:var(--ink);}
+.rules ul{margin:0;padding-left:18px;}
+.rules b{color:var(--ink);}
+
+.modal-bg{position:fixed;inset:0;background:rgba(30,27,75,.55);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow:auto;}
+.modal{background:#fff;border-radius:12px;max-width:460px;width:100%;overflow:hidden;}
+.modal-head{background:var(--indigo-900);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;}
+.modal-head h3{margin:0;font-size:15px;}
+.modal-head button{background:none;border:none;color:#C7CBF0;font-size:20px;cursor:pointer;}
+.modal form{padding:18px;display:flex;flex-direction:column;gap:12px;}
+.field label{display:block;font-size:11.5px;font-weight:700;color:var(--ink-soft);margin-bottom:4px;}
+.field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--rule);border-radius:7px;font-size:13px;background:#FAFBFD;}
+.field .hint{font-size:11.5px;color:var(--ink-soft);margin-top:4px;line-height:1.4;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;}
+.check input{width:16px;height:16px;accent-color:var(--indigo-700);}
+.btn-nuvem{background:#fff;color:var(--indigo-950);display:inline-flex;align-items:center;gap:7px;}
+.btn-nuvem:hover{background:#EEF0FB;}
+.nv-dot{width:9px;height:9px;border-radius:50%;background:#9AA1B5;flex:none;}
+.nv-dot.ok{background:#16A34A;} .nv-dot.salvando{background:var(--amber);} .nv-dot.erro{background:var(--low);}
+.nv-lista{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow:auto;}
+.nv-item{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font-size:12.5px;}
+.nv-item b{font-size:12.5px;} .nv-item small{color:var(--ink-soft);font-size:11px;display:block;}
+.nv-acoes{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.nv-acoes .btn{padding:6px 10px;font-size:12px;}
+.chip{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;margin-left:4px;}
+.chip-ok{background:#DCFCE7;color:#166534;} .chip-sem{background:#EEF0F4;color:#5E6680;} .chip-bloq{background:#FBE3E6;color:#B42335;}
+.pin-grande{font-size:34px;font-weight:800;letter-spacing:.18em;text-align:center;padding:14px;border:2px dashed var(--amber);border-radius:10px;background:#FFFBEB;color:var(--indigo-950);font-variant-numeric:tabular-nums;user-select:all;}
+.nv-msg{font-size:12.5px;line-height:1.5;color:var(--ink-soft);}
+.nv-msg.erro{color:var(--low);font-weight:600;} .nv-msg.ok{color:#166534;font-weight:600;}
+.rel-saida{display:flex;flex-direction:column;gap:14px;max-height:55vh;overflow:auto;border-top:1px solid var(--rule);padding-top:12px;}
+.rel-saida:empty{display:none;}
+.rel-dia h4{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between;gap:8px;color:var(--indigo-950);}
+.rel-dia h4 span{font-weight:500;font-size:12px;color:var(--ink-soft);}
+.rel-sub{margin:8px 0 4px;font-size:12.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
+.rel-tab{width:100%;border-collapse:collapse;font-size:12.5px;}
+.rel-tab th{background:var(--indigo-950);color:#fff;text-align:left;padding:6px 8px;font-size:11.5px;}
+.rel-tab td{padding:6px 8px;border-bottom:1px solid var(--rule);}
+.rel-tab tr:nth-child(even) td{background:#F6F7FB;}
+.rel-tab td.rel-h{font-weight:700;background:var(--amber-soft) !important;color:#78350F;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.modal-actions{display:flex;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--rule);}
+.modal-actions div{display:flex;gap:8px;}
+
+.print-head{display:none;}
+
+@media (max-width:640px){
+  .nome{min-width:170px;}
+  .row2{grid-template-columns:1fr;}
+}
+@media print{
+  @page{size:A4 landscape;margin:7mm;}
+  body{background:#fff;}
+  .no-print{display:none !important;}
+  main{padding:0;max-width:none;}
+  .print-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px;}
+  .print-head h1{margin:0;font-size:15px;}
+  .print-head p{margin:2px 0 0;font-size:10px;}
+  .sheet{border:none;}
+  .sheet-head{padding:0 0 6px;}
+  .tablewrap{overflow:visible;}
+  table{font-size:9px;}
+  thead th{padding:2px 0;min-width:0;}
+  .nome{min-width:0;max-width:none;padding:2px 4px;position:static;}
+  .cel{width:20px;height:16px;font-size:8.5px;border-radius:3px;}
+  .cel.ov::after{display:none;}
+  .warn,.meta .tag{display:none;}
+  .meta{font-size:8px;}
+  .emp-btn{font-size:9px;}
+  tfoot .min{display:none;}
+  * {-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar no-print">
+  <div class="inner">
+    <div class="brand">
+      <div class="logo">⛽</div>
+      <div>
+        <h1>Escala · Posto Trevo</h1>
+        <p>Gestão da escala · administrador</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-nuvem" id="btn-nuvem" title="Salvar na nuvem, publicar e gerenciar acessos"><span class="nv-dot" id="nv-dot"></span><span id="nv-txt">Nuvem: desconectado</span></button>
+      <button class="btn btn-dark" id="btn-novo">+ Novo funcionário</button>
+      <button class="btn btn-dark" id="btn-rel">Relatórios</button>
+      <button class="btn btn-dark" id="btn-xlsx">Exportar Excel</button>
+      <button class="btn btn-dark" id="btn-pdf">Exportar PDF</button>
+      <button class="btn btn-amber" id="btn-print">Imprimir escala</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="print-head">
+    <div>
+      <h1 id="print-titulo">POSTO TREVO · ESCALA DE TRABALHO 5x2</h1>
+      <p id="print-sub"></p>
+    </div>
+    <p id="print-date"></p>
+  </div>
+
+  <div class="controls no-print">
+    <div class="tabs" role="tablist">
+      <button id="tab-pista" data-tab="pista">Pista (<span id="n-pista">0</span>)</button>
+      <button id="tab-caixas" data-tab="caixas">Caixas (<span id="n-caixas">0</span>)</button>
+    </div>
+    <div class="ctl-group">
+      <label for="f-mes">Mês</label>
+      <input type="month" id="f-mes">
+      <label for="f-int">Intervalo</label>
+      <select id="f-int" title="Duração do intervalo para jornadas acima de 6 horas" style="border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;">
+        <option value="60">1 hora</option>
+        <option value="90">1h30</option>
+        <option value="120">2 horas</option>
+      </select>
+      <label for="f-modelo">Modelo de escala</label>
+      <select id="f-modelo" style="border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;font-weight:600;">
+        <option value="5x2">5x2</option>
+        <option value="12x36">12x36</option>
+      </select>
+      <label for="f-modo" id="lbl-modo">Folgas da pista</label>
+      <select id="f-modo" style="border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;max-width:260px;">
+        <option value="rodizio4">Rodízio de 4 semanas (sempre seguidas, 1 domingo por mês)</option>
+        <option value="equilibrado">Equilibrado (domingo a cada 3 semanas)</option>
+      </select>
+      <label for="f-cobre">Cobre a noite no fim de semana</label>
+      <select id="f-cobre" style="border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;max-width:240px;"></select>
+      <input type="text" id="f-busca" placeholder="Buscar funcionário…">
+      <button class="btn btn-light" id="btn-limpar-ajustes" title="Desfaz as trocas feitas à mão neste mês">Desfazer ajustes do mês</button>
+    </div>
+  </div>
+
+  <div class="summary no-print" id="summary"></div>
+  <div id="alerts" class="no-print"></div>
+  <section class="revez no-print" id="revez" hidden></section>
+  <section class="revez no-print" id="doze" hidden></section>
+
+  <section class="sheet">
+    <div class="sheet-head">
+      <h2 id="sheet-title"></h2>
+      <div class="legend">
+        <span><i style="background:var(--trab);color:var(--trab-ink)">T</i> Trabalha</span>
+        <span><i style="background:var(--folga);color:var(--folga-ink)">F</i> Folga</span>
+        <span><i style="background:var(--indigo-900);color:#fff">N</i> Noite (22:00 às 06:00; caixas no domingo, plantão 19:00 às 06:00)</span>
+        <span><i style="background:#0E7490;color:#fff">D</i> Plantão do domingo (07:00 às 19:00)</span>
+        <span><i style="background:#B45309;color:#fff">C</i> Frentista no caixa à noite (22:00 às 06:00)</span>
+        <span><i style="background:var(--ferias);color:var(--ferias-ink)">FÉ</i> Férias</span>
+        <span class="no-print"><i style="background:var(--trab);position:relative;"><b style="position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:var(--indigo-700)"></b></i> Ajustado à mão</span>
+      </div>
+    </div>
+    <div class="tablewrap" id="tablewrap"></div>
+  </section>
+
+  <section class="rules no-print">
+    <h3>Como a escala é montada</h3>
+    <ul>
+      <li><b>Duas folgas em toda semana</b> (segunda a domingo), conforme a escala 5x2 da EC 141/2026, em vigor a partir de 15/12/2026.</li>
+      <li><b>Rodízio de domingos em 3 grupos (A, B e C):</b> cada grupo folga um domingo a cada 3 semanas. Isso garante pelo menos um domingo de folga por mês e atende a regra do comércio (Lei 10.101/2000), que pede folga no domingo pelo menos uma vez a cada 3 semanas.</li>
+      <li><b>Nunca mais de 6 dias seguidos de trabalho</b>, inclusive na virada de uma semana para outra.</li>
+      <li>As outras folgas são espalhadas para manter o mesmo número de pessoas em cada período (manhã, tarde e noite).</li>
+      <li><b>Pista, rodízio de 4 semanas:</b> a folga anda um dia por semana, sempre em dois dias seguidos: quarta e quinta, quinta e sexta, sexta e sábado, sábado e domingo. Depois de folgar o fim de semana, o frentista trabalha segunda e terça e recomeça na quarta. Cada um folga um domingo a cada 4 semanas (pelo menos um por mês). Os frentistas da manhã e da tarde são divididos em 4 fases, pra cada semana ter gente em todas as etapas.</li>
+      <li><b>Intervalos (CLT, art. 71):</b> jornada acima de 6 horas tem de 1 a 2 horas de intervalo (escolha a duração em "Intervalo"); de 4 a 6 horas, 15 minutos. O app sugere o horário de cada um entre 2 horas depois da entrada e 1 hora antes da saída, e quem tem o mesmo horário sai em horas diferentes. Para mudar, clique no nome do funcionário. Nos caixas com uma pessoa só no turno, alguém da pista cobre o intervalo.</li>
+      <li><b>Modelo 12x36</b> (escolha em "Modelo de escala"): cada um trabalha 12 horas por plantão, dia sim, dia não, no turno do dia ou da noite. Com intervalo de 1 hora, o plantão fica com 13 horas no posto (12 trabalhadas); com intervalo indenizado, 12 horas. A turma A e a turma B se revezam, então cada posto precisa de 2 pessoas no dia e 2 na noite. Cada um folga um domingo a cada 2 semanas. Precisa estar previsto em acordo ou convenção coletiva.</li>
+      <li><b>Pista, modo equilibrado</b> (escolha em "Folgas da pista"): domingo de folga a cada 3 semanas e folgas seguidas em 2 de cada 3 semanas, com a pista mais cheia na sexta e no sábado.</li>
+      <li><b>Noite de sábado e domingo:</b> quem tem folga fixa no fim de semana à noite é coberto por um funcionário escolhido em cada setor. Ele trabalha de quarta a sexta no turno dele, faz a noite de sábado e domingo (N) e folga segunda e terça, o que respeita o descanso de 11 horas entre jornadas. Na semana do domingo de folga dele (a cada 3 semanas), ele faz a noite de sexta e sábado e o titular da noite folga sexta e sábado e trabalha o domingo.</li>
+      <li><b>Caixas no fim de semana:</b> duas turmas se revezam. A turma da vez trabalha segunda, sexta e sábado no turno dela e faz o plantão de 12 horas do domingo (07:00 às 19:00 e 19:00 às 06:00). A outra turma folga o fim de semana inteiro e a segunda (descanso depois da noite de domingo) e trabalha de terça a sexta. Cada caixa folga um domingo a cada 2 semanas.</li>
+      <li><b>Caixa na noite de sábado:</b> o titular da noite mantém a folga fixa de sábado e domingo, e um frentista escolhido no painel do revezamento faz o caixa das 22:00 às 06:00 (C). Ele folga todo domingo, pra descansar depois da noite, e mais um dia da semana.</li>
+      <li>Precisa trocar uma folga? Clique no dia para alternar entre T e F. A troca fica marcada com um ponto e os avisos acima mostram se alguma regra deixou de ser cumprida.</li>
+      <li>Clique no nome do funcionário para mudar turno, grupo de domingo, folga fixa ou férias. Os dados ficam salvos neste aparelho.</li>
+    </ul>
+  </section>
+</main>
+
+<div id="modal-root"></div>
+
+<script>
+const DAY = 864e5;
+// Segunda-feira de referência do rodízio de domingos. Mudar esta data muda qual grupo folga em cada domingo.
+const EPOCH = Date.UTC(2026, 0, 5);
+const STORAGE_KEY = 'escala-trevo-v1';
+const GRUPOS = ['A','B','C'];
+const PERIODOS = { manha:'Manhã', tarde:'Tarde', noite:'Noite' };
+const SETORES = { pista:'Pista / Frentistas', caixas:'Caixas' };
+const DIA_LETRA = ['D','S','T','Q','Q','S','S'];
+const TURNOS = ['05:00 às 13:00','06:00 às 14:00','07:00 às 15:00','08:00 às 16:00','13:00 às 21:00','14:00 às 22:00','15:00 às 23:00','22:00 às 06:00'];
+
+const PADRAO = [
+  { id:1,  nome:'LEONARDO LUCAS VIEIRA', setor:'pista', turno:'05:00 às 13:00' },
+  { id:2,  nome:'ROBENILDO SANTO SSILVA', setor:'pista', turno:'05:00 às 13:00' },
+  { id:3,  nome:'ELISVAN EDSON DOS SANTOS AFONSO', setor:'pista', turno:'06:00 às 14:00' },
+  { id:4,  nome:'ELISVONIO HELIODOS SANTOS AFONSO', setor:'pista', turno:'06:00 às 14:00' },
+  { id:5,  nome:'SILVANO DA SILVA SANTOS', setor:'pista', turno:'06:00 às 14:00' },
+  { id:6,  nome:'MATHEUS FILIPE ANTONIO DA SILVA', setor:'pista', turno:'07:00 às 15:00' },
+  { id:7,  nome:'MATHEUS SOUZA LEÃO', setor:'pista', turno:'07:00 às 15:00' },
+  { id:8,  nome:'RODRIGODA SILVA LIMA', setor:'pista', turno:'07:00 às 15:00' },
+  { id:9,  nome:'SAMUEL VINICIUS DA SILVA SANTOS', setor:'pista', turno:'08:00 às 16:00' },
+  { id:10, nome:'DENILSON BATISTA GOMES DA SILVA', setor:'pista', turno:'13:00 às 21:00' },
+  { id:11, nome:'DOMINGOS BISPO', setor:'pista', turno:'13:00 às 21:00' },
+  { id:12, nome:'GUSTAVO HENRIQUE SOARES PEREIRA', setor:'pista', turno:'13:00 às 21:00' },
+  { id:13, nome:'ISRAEL MORAIS DE OLIVEIRA', setor:'pista', turno:'13:00 às 21:00' },
+  { id:14, nome:'LEOCI NASCIMENTO DE SOUZA', setor:'pista', turno:'13:00 às 21:00' },
+  { id:15, nome:'KAWE VICTOR LOPES BASTOS', setor:'pista', turno:'14:00 às 22:00' },
+  { id:16, nome:'ADONTINO FRANCISCO DOS SANTOS', setor:'pista', turno:'15:00 às 23:00' },
+  { id:17, nome:'ANTONIO JOSE DIAS VASCONCELOS', setor:'pista', turno:'15:00 às 23:00' },
+  { id:18, nome:'BRUNO DA SILVA TAVARES', setor:'pista', turno:'15:00 às 23:00' },
+  { id:19, nome:'RONIVON JOSE RAMOS DOS SANTOS', setor:'pista', turno:'15:00 às 23:00' },
+  { id:20, nome:'FRANCISCO ANTONIO DE OLIVEIRA', setor:'pista', turno:'22:00 às 06:00', folgaFixa:true },
+  { id:21, nome:'DIONATAS JOSE BARROS', setor:'caixas', turno:'06:00 às 14:00' },
+  { id:22, nome:'DOMINGOS FRANCISCO RODRIGUES', setor:'caixas', turno:'06:00 às 14:00' },
+  { id:23, nome:'WAGNER VILELA DOS SANTOS', setor:'caixas', turno:'14:00 às 22:00' },
+  { id:24, nome:'LUCIANO JOSE DA SILVA', setor:'caixas', turno:'14:00 às 22:00' },
+  { id:25, nome:'LUIS HENRIQUE SOARES DOS SANTOS', setor:'caixas', turno:'22:00 às 06:00', folgaFixa:true },
+];
+
+// ---------- utilidades de data (tudo em UTC pra não sofrer com fuso) ----------
+const mod = (a,n) => ((a % n) + n) % n;
+const toIso = t => new Date(t).toISOString().slice(0,10);
+const fromIso = s => { const [y,m,d] = s.split('-').map(Number); return Date.UTC(y, m-1, d); };
+const dow = t => new Date(t).getUTCDay();
+const ddmm = t => { const d = new Date(t); return String(d.getUTCDate()).padStart(2,'0') + '/' + String(d.getUTCMonth()+1).padStart(2,'0'); };
+const semanaIdx = t => Math.floor((t - EPOCH) / DAY / 7);
+function mesAtual(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+function nomeMes(mes){ const [y,m] = mes.split('-').map(Number); return new Date(Date.UTC(y,m-1,1)).toLocaleDateString('pt-BR',{month:'long',year:'numeric',timeZone:'UTC'}); }
+function horaEntrada(turno){ const m = /^(\d{2}):/.exec(turno||''); return m ? Number(m[1]) : 0; }
+function periodo(turno){ const h = horaEntrada(turno); return h < 12 ? 'manha' : h < 21 ? 'tarde' : 'noite'; }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ---------- estado ----------
+let state = {
+  employees: [],
+  overrides: {},   // "id|aaaa-mm-dd" -> 'T' ou 'F' (troca feita à mão)
+  minimos: { pista:{manha:4,tarde:4,noite:1}, caixas:{manha:1,tarde:1,noite:1} },
+  // quem cobre a noite de sábado e domingo em cada setor (id do funcionário)
+  coberturaNoite: null,
+};
+// Escolha inicial: um frentista do turno 15:00 às 23:00 e um caixa do turno 14:00 às 22:00,
+// os que terminam mais perto do horário da noite.
+const COBERTURA_PADRAO = { pista:19, caixas:24 };
+const trabalha = s => s==='T' || s==='N' || s==='D' || s==='C';
+
+// Revezamento de fim de semana dos caixas: duas turmas (uma pessoa faz 07:00 às 19:00, a outra 19:00 às 06:00).
+// A Turma 1 trabalha o fim de semana 17-18/10/2026 e depois alterna a cada semana.
+// noiteSabado (caixa da noite de sábado):
+//   'frentista'  = um frentista vai pro caixa das 22:00 às 06:00 e folga o domingo (titular mantém folga fixa sáb/dom)
+//   'titular'    = o caixa da noite faz o sábado e folga domingo e quarta
+//   'descoberta' = ninguém cobre
+const FRENTISTA_SABADO_PADRAO = 18;
+const REVEZ_PADRAO = { ativo:true, t1:{dia:21, noite:23}, t2:{dia:22, noite:24}, inverter:false, noiteSabado:'frentista', frentistaSabado:FRENTISTA_SABADO_PADRAO };
+function revez(){
+  const r = state.revezCaixas;
+  if(!r || !r.ativo || modelo12()) return null;
+  const ids = [r.t1&&r.t1.dia, r.t1&&r.t1.noite, r.t2&&r.t2.dia, r.t2&&r.t2.noite].map(Number);
+  if(ids.some(x=>!x) || new Set(ids).size !== 4) return null;
+  if(!ids.every(id=> state.employees.some(e=>e.id===id && e.setor==='caixas' && !e.folgaFixa))) return null;
+  const modo = r.noiteSabado || 'frentista';
+  const cobPista = cobridorPista();
+  const fs = state.employees.find(e=> e.id===Number(r.frentistaSabado) && e.setor==='pista' && !e.folgaFixa && !(cobPista && cobPista.id===e.id));
+  return { t1:{dia:ids[0], noite:ids[1]}, t2:{dia:ids[2], noite:ids[3]}, inverter:!!r.inverter, ids,
+           modoSabado: modo, titularSabado: modo === 'titular',
+           frentistaSabado: modo === 'frentista' && fs ? fs.id : null };
+}
+// cobridor da noite da pista (sem passar pelo revezamento dos caixas)
+function cobridorPista(){
+  const id = state.coberturaNoite && state.coberturaNoite.pista;
+  return id ? (state.employees.find(x=>x.id===id && x.setor==='pista' && !x.folgaFixa) || null) : null;
+}
+// frentista que cobre o caixa na noite de sábado
+function frentistaSabado(){ const rv = revez(); return rv && rv.frentistaSabado ? rv.frentistaSabado : null; }
+
+// Rodízio de 4 semanas da pista: a folga anda um dia por semana, sempre em dias seguidos.
+// Qua-Qui → Qui-Sex → Sex-Sáb → Sáb-Dom → (trabalha Seg e Ter) → Qua-Qui...
+// Domingo de folga uma vez a cada 4 semanas, ou seja, pelo menos um por mês.
+const RODIZIO_INICIO = [2,3,4,5]; // dia (0 = segunda) em que começa a folga em cada semana do ciclo
+function rodizioAtivo(){ return (state.modoPista || 'rodizio4') === 'rodizio4'; }
+// ---------- Modelo 12x36 ----------
+// Cada um trabalha 12h e descansa 36h (dia sim, dia não). A turma A trabalha nos dias pares
+// contados a partir de 05/01/2026 e a turma B nos ímpares. Vale para pista e caixas.
+const HORARIOS12 = {
+  '06': { dia:'06:00 às 18:00', noite:'18:00 às 06:00' },
+  '07': { dia:'07:00 às 19:00', noite:'19:00 às 07:00' },
+};
+const DOZE_PADRAO = { horarios:{ pista:{dia:'06:00', noite:'18:00'}, caixas:{dia:'06:00', noite:'18:00'} }, posNoite:{ pista:1, caixas:1 }, manual:{}, noite1:true };
+const MINIMOS12_PADRAO = { pista:{ dia:6, noite:1 }, caixas:{ dia:1, noite:1 } };
+function modelo12(){ return state.modelo === '12x36'; }
+function cfg12(){
+  const cfg = state.doze || (state.doze = JSON.parse(JSON.stringify(DOZE_PADRAO)));
+  // regra nova: 1 funcionário por noite em cada setor (escalas salvas antes tinham 3 frentistas)
+  if(!cfg.noite1){
+    cfg.posNoite = cfg.posNoite || {};
+    cfg.posNoite.pista = 1; cfg.posNoite.caixas = 1;
+    const m = state.minimos12 && state.minimos12.pista;
+    if(m && Number(m.noite) > 1) m.noite = 1;
+    cfg.noite1 = true;
+  }
+  return cfg;
+}
+// início de cada turno (hora "HH:MM") por setor; o fim é sempre 12 horas depois
+function inicios12(setor){
+  const cfg = cfg12();
+  if(!cfg.horarios){
+    // configurações antigas guardavam só "06" ou "07"
+    const h = cfg.horario === '07' ? {dia:'07:00', noite:'19:00'} : {dia:'06:00', noite:'18:00'};
+    cfg.horarios = { pista:{...h}, caixas:{...h} };
+  }
+  return cfg.horarios[setor] || (cfg.horarios[setor] = {dia:'06:00', noite:'18:00'});
+}
+const minutos = hhmm => { const [h,m] = String(hhmm||'00:00').split(':').map(Number); return (h||0)*60 + (m||0); };
+const hhmm = min => { const x = mod(min, 1440); return String(Math.floor(x/60)).padStart(2,'0') + ':' + String(x%60).padStart(2,'0'); };
+// Jornada do 12x36 na escala: 12 horas trabalhadas + o intervalo (ex.: 13h de permanência com 1h de intervalo).
+// Com intervalo indenizado, a permanência é de 12 horas.
+function intervalo12Min(){ return cfg12().intervaloIndenizado ? 0 : Math.min(120, Math.max(60, Number(state.intervaloMin) || 60)); }
+function span12(){ return 720 + intervalo12Min(); }
+const faixa = ini => ini + ' às ' + hhmm(minutos(ini) + span12());
+function horario12(setor){
+  const h = inicios12(setor || 'pista');
+  return { dia: faixa(h.dia), noite: faixa(h.noite) };
+}
+// confere se dia + noite cobrem as 24 horas sem buraco nem sobreposição
+function checarHorario12(setor){
+  const h = inicios12(setor);
+  const dif = mod(minutos(h.noite) - minutos(h.dia), 1440);
+  if(dif === 720) return '';
+  if(dif > 720) return `Fica sem ninguém das ${hhmm(minutos(h.dia)+720)} às ${h.noite}, e das ${h.dia} às ${hhmm(minutos(h.noite)+720)} as duas turmas estão juntas.`;
+  return `Os turnos se sobrepõem: das ${h.noite} às ${hhmm(minutos(h.dia)+720)} as duas turmas estão juntas, e fica sem ninguém das ${hhmm(minutos(h.noite)+720)} às ${h.dia}.`;
+}
+// Quem fica no dia e quem fica na noite, e em qual turma (A ou B).
+// Automático: vão pra noite os de turno mais tarde (o titular da noite primeiro); o resto fica no dia.
+// Dentro de cada grupo, as turmas A e B alternam pra ficarem do mesmo tamanho.
+function distribuicao12(){
+  const cfg = cfg12(), manual = cfg.manual || {}, out = {};
+  ['pista','caixas'].forEach(setor=>{
+    const lista = state.employees.filter(e=>e.setor===setor);
+    const peso = e => periodo(e.turno)==='noite' ? 100 : horaEntrada(e.turno);
+    const pos = Math.max(0, Number((cfg.posNoite||{})[setor] ?? DOZE_PADRAO.posNoite[setor]));
+    // quem foi posto à mão no dia ou na noite entra primeiro no grupo escolhido
+    const fixosNoite = lista.filter(e=> manual[e.id] && manual[e.id].turno==='noite');
+    const fixosDia = lista.filter(e=> manual[e.id] && manual[e.id].turno==='dia');
+    const livres = lista.filter(e=> !(manual[e.id] && manual[e.id].turno)).sort((a,b)=> peso(b)-peso(a) || a.nome.localeCompare(b.nome));
+    const vagas = Math.max(0, Math.min(livres.length, pos*2 - fixosNoite.length));
+    const noite = fixosNoite.concat(livres.slice(0, vagas));
+    const dia = fixosDia.concat(livres.slice(vagas));
+    [['noite', noite], ['dia', dia]].forEach(([turno, grupo])=>{
+      grupo.sort((a,b)=> horaEntrada(a.turno)-horaEntrada(b.turno) || a.nome.localeCompare(b.nome));
+      // turma escolhida à mão é respeitada; os demais completam A e B alternando
+      const cont = { A:0, B:0 };
+      grupo.forEach(e=>{ const t = manual[e.id] && manual[e.id].turma; if(t) cont[t]++; });
+      grupo.forEach(e=>{
+        let turma = manual[e.id] && manual[e.id].turma;
+        if(!turma){ turma = cont.A <= cont.B ? 'A' : 'B'; cont[turma]++; }
+        out[e.id] = { turno, turma };
+      });
+    });
+  });
+  return out;
+}
+// Em quais dias do mês a turma trabalha (o 12x36 alterna dia sim, dia não; em mês de 31 dias
+// o dia 31 e o dia 1 seguinte são seguidos, então no mês seguinte a turma troca de par para ímpar)
+function diasDaTurma(turma, mes){
+  const [y,m] = mes.split('-').map(Number);
+  const dia1 = Date.UTC(y, m-1, 1);
+  const aNoDia1 = mod(Math.round((dia1 - EPOCH) / DAY), 2) === 0;
+  return (turma === 'A') === aNoDia1 ? 'ímpares' : 'pares';
+}
+const nomeTurma = (turma, mes) => `Turma ${turma} (dias ${diasDaTurma(turma, mes)})`;
+// Ao mexer na turma de alguém, a distribuição atual do setor fica fixa, pra o app não
+// reequilibrar sozinho e mudar outra pessoa de turma sem você ver.
+function congelar12(setor){
+  const d12 = distribuicao12(), manual = cfg12().manual = cfg12().manual || {};
+  state.employees.filter(e=> e.setor===setor).forEach(e=>{ manual[e.id] = { turno: d12[e.id].turno, turma: d12[e.id].turma }; });
+}
+
+function gerar12(g){
+  const d12 = distribuicao12();
+  const base = {};
+  state.employees.forEach(e=>{
+    const info = d12[e.id];
+    for(let t = g.inicio; t <= g.lastSun; t += DAY){
+      const k = e.id + '|' + toIso(t);
+      if(emFerias(e, t)){ base[k] = 'V'; continue; }
+      const par = mod(Math.round((t - EPOCH) / DAY), 2) === 0;
+      const trabalha = (info.turma === 'A') === par;
+      base[k] = trabalha ? (info.turno === 'dia' ? 'D' : 'N') : 'F';
+    }
+  });
+  return base;
+}
+// Horário de trabalho de cada funcionário no modelo escolhido.
+// No 12x36 vale o horário próprio dele (se tiver) ou o do setor para o turno dele (dia ou noite).
+function horarioDe(e, d12){
+  if(modelo12()){
+    if(e.h12 && e.h12.ini && e.h12.fim) return e.h12.ini + ' às ' + e.h12.fim;
+    const info = (d12 || distribuicao12())[e.id];
+    return horario12(e.setor)[info ? info.turno : 'dia'];
+  }
+  return e.turno;
+}
+const partesTurno = turno => { const m = /(\d{2}:\d{2}).*?(\d{2}:\d{2})/.exec(turno||''); return m ? [m[1], m[2]] : ['06:00','14:00']; };
+
+// ---------- Intervalos (CLT art. 71) ----------
+// Jornada acima de 6h: mínimo 1h e máximo 2h. De 4h a 6h: 15 minutos. Até 4h: sem intervalo obrigatório.
+// O intervalo automático fica entre 2h depois da entrada e 1h antes da saída, e quem tem o mesmo
+// horário sai em horas diferentes, pra não esvaziar a pista.
+const chaveModelo = () => modelo12() ? '12x36' : '5x2';
+const duracaoTurnoMin = horario => { const [a,b] = partesTurno(horario); return mod(minutos(b) - minutos(a), 1440) || 1440; };
+function intervaloMinimo(durTurno){ return durTurno > 360 ? 60 : durTurno > 240 ? 15 : 0; }
+function duracaoIntervalo(durTurno){
+  if(durTurno > 360) return Math.min(120, Math.max(60, Number(state.intervaloMin) || 60));
+  return intervaloMinimo(durTurno);
+}
+function intervalosAuto(d12){
+  const grupos = {}, out = {};
+  state.employees.forEach(e=>{
+    const h = horarioDe(e, d12);
+    const k = e.setor + '|' + h + (modelo12() && d12 ? '|' + d12[e.id].turma : '');
+    (grupos[k] = grupos[k] || []).push(e);
+  });
+  Object.values(grupos).forEach(lista=>{
+    lista.sort((a,b)=> a.nome.localeCompare(b.nome));
+    const h = horarioDe(lista[0], d12), ini = minutos(partesTurno(h)[0]);
+    const dt = duracaoTurnoMin(h), dur = duracaoIntervalo(dt);
+    if(!dur) return;
+    let ja = dt > 360 ? 120 : Math.round((dt - dur) / 2);     // começo da janela (minutos depois da entrada)
+    let ate = dt > 360 ? dt - 60 - dur : ja;                    // último começo possível
+    if(ate < ja) ate = ja;
+    const vagas = Math.floor((ate - ja) / dur) + 1;
+    lista.forEach((e, i)=>{
+      const comeco = ini + ja + (i % vagas) * dur;
+      out[e.id] = { ini: hhmm(comeco), fim: hhmm(comeco + dur) };
+    });
+  });
+  return out;
+}
+// intervalo de um funcionário no modelo aberto: o escolhido à mão ou o automático
+function intervaloDe(e, d12, autoMap){
+  if(modelo12() && cfg12().intervaloIndenizado) return { indenizado:true, texto:'Intervalo indenizado' };
+  const manual = e.intervalos && e.intervalos[chaveModelo()];
+  if(manual && manual.ini && manual.fim) return { ...manual, auto:false, texto: manual.ini + '-' + manual.fim };
+  const a = (autoMap || intervalosAuto(d12))[e.id];
+  return a ? { ...a, auto:true, texto: a.ini + '-' + a.fim } : null;
+}
+// confere o intervalo com a CLT
+function avisosIntervalo(e, d12){
+  const it = intervaloDe(e, d12);
+  const h = horarioDe(e, d12), dt = duracaoTurnoMin(h), min = intervaloMinimo(dt);
+  if(!it){ return min ? [`Sem intervalo (jornada de ${String(dt/60).replace('.', ',')}h pede ${min===60?'1 hora':'15 minutos'})`] : []; }
+  if(it.indenizado) return [];
+  const av = [];
+  const dur = mod(minutos(it.fim) - minutos(it.ini), 1440);
+  const desdeEntrada = mod(minutos(it.ini) - minutos(partesTurno(h)[0]), 1440);
+  if(min && dur < min) av.push(`Intervalo de ${dur} min, abaixo do mínimo de ${min===60?'1 hora':'15 minutos'}`);
+  if(dt > 360 && dur > 120) av.push(`Intervalo de ${String(dur/60).replace('.', ',')}h passa de 2 horas (só com acordo ou convenção)`);
+  if(desdeEntrada === 0 || desdeEntrada + dur >= dt) av.push(`Intervalo ${it.texto} fora do horário de trabalho (${h})`);
+  return av;
+}
+
+// grupo de uma pessoa na tabela (no 5x2: período; no 12x36: dia/noite + turma)
+function grupoTabela(e, d12){
+  if(modelo12()){
+    const i = d12[e.id];
+    return { chave: i.turno + i.turma, nome: (i.turno==='dia' ? 'Dia' : 'Noite') + ' · turma ' + i.turma };
+  }
+  const p = periodo(e.turno);
+  return { chave: p, nome: PERIODOS[p] };
+}
+// períodos contados no rodapé (cobertura)
+function periodosCobertura(lista){
+  if(modelo12()) return ['dia','noite'];
+  return Object.keys(PERIODOS).filter(p=> lista.some(e=>periodo(e.turno)===p));
+}
+const NOME_PERIODO = { manha:'Manhã', tarde:'Tarde', noite:'Noite', dia:'Dia' };
+// mínimo de pessoas por período (cada modelo guarda os seus)
+function minimo(setor, p){
+  if(modelo12()){
+    const m = (state.minimos12||{})[setor] || {};
+    return Number(m[p] ?? MINIMOS12_PADRAO[setor][p]) || 0;
+  }
+  return Number((state.minimos[setor]||{})[p]) || 0;
+}
+
+// fase (0 a 3) de cada frentista no rodízio, distribuída dentro da manhã e da tarde
+function fasesRodizio(){
+  const fases = {};
+  if(!rodizioAtivo() || modelo12()) return fases;
+  const cp = cobridorPista(), fs = frentistaSabado();
+  const buckets = {};
+  state.employees.filter(e=> e.setor==='pista' && !e.folgaFixa && !(cp && cp.id===e.id) && e.id!==fs).forEach(e=>{
+    (buckets[periodo(e.turno)] = buckets[periodo(e.turno)] || []).push(e);
+  });
+  Object.values(buckets).forEach(lista=>{
+    lista.sort((a,b)=> horaEntrada(a.turno)-horaEntrada(b.turno) || a.nome.localeCompare(b.nome));
+    lista.forEach((e,i)=>{ fases[e.id] = i % 4; });
+  });
+  return fases;
+}
+// titular da noite dos caixas que passa a fazer o sábado (quando essa opção está ligada)
+function titularSabado(e){
+  const rv = e.setor==='caixas' ? revez() : null;
+  return !!(rv && rv.titularSabado && e.folgaFixa && periodo(e.turno)==='noite');
+}
+function turmaDaSemana(rv, ws){
+  const par = mod(semanaIdx(ws), 2) === 0;
+  return (par !== rv.inverter) ? 't1' : 't2';
+}
+
+function cobridor(setor){
+  if(modelo12()) return null;
+  if(setor==='caixas' && revez()) return null; // o revezamento já cobre a noite do fim de semana
+  const id = state.coberturaNoite && state.coberturaNoite[setor];
+  return id ? (state.employees.find(x=>x.id===id && x.setor===setor && !x.folgaFixa) || null) : null;
+}
+const ui = { setor:'pista', mes:mesAtual(), busca:'', editId:null };
+let ultimaGeracao = null;
+
+function salvar(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} agendarNuvem(); }
+function carregar(){
+  try{
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if(s && Array.isArray(s.employees)){
+      state.employees = s.employees;
+      state.overrides = s.overrides || {};
+      if(s.minimos) state.minimos = s.minimos;
+      state.coberturaNoite = s.coberturaNoite || coberturaPadrao();
+      state.revezCaixas = s.revezCaixas || JSON.parse(JSON.stringify(REVEZ_PADRAO));
+      // versões anteriores não tinham o frentista do sábado: passa a usar esse modo
+      if(state.revezCaixas.frentistaSabado === undefined){
+        state.revezCaixas.noiteSabado = 'frentista';
+        state.revezCaixas.frentistaSabado = FRENTISTA_SABADO_PADRAO;
+      }
+      salvar();
+      return;
+    }
+  }catch(e){}
+  state.employees = PADRAO.map(e => ({ folgaFixa:false, feriasIni:'', feriasFim:'', domingo:null, ...e }));
+  distribuirGrupos();
+  state.coberturaNoite = coberturaPadrao();
+  state.revezCaixas = JSON.parse(JSON.stringify(REVEZ_PADRAO));
+  salvar();
+}
+function coberturaPadrao(){
+  const out = { pista:null, caixas:null };
+  Object.keys(COBERTURA_PADRAO).forEach(setor=>{
+    const e = state.employees.find(x=>x.id===COBERTURA_PADRAO[setor] && x.setor===setor && !x.folgaFixa);
+    if(e) out[setor] = e.id;
+  });
+  return out;
+}
+
+// Divide quem faz rodízio em A/B/C dentro de cada setor e período, pra cada domingo ficar com 2/3 da equipe trabalhando.
+function distribuirGrupos(){
+  const buckets = {};
+  state.employees.filter(e=>!e.folgaFixa).forEach(e=>{
+    const k = e.setor + '|' + periodo(e.turno);
+    (buckets[k] = buckets[k] || []).push(e);
+  });
+  Object.values(buckets).forEach(lista=>{
+    lista.sort((a,b)=> horaEntrada(a.turno)-horaEntrada(b.turno) || a.nome.localeCompare(b.nome));
+    lista.forEach((e,i)=>{ if(!e.domingo) e.domingo = GRUPOS[i % 3]; });
+  });
+}
+function grupoMenosUsado(setor, turno, ignorarId){
+  const cont = {A:0,B:0,C:0};
+  state.employees.forEach(e=>{
+    if(e.id!==ignorarId && !e.folgaFixa && e.setor===setor && periodo(e.turno)===periodo(turno) && cont[e.domingo]!=null) cont[e.domingo]++;
+  });
+  return GRUPOS.slice().sort((a,b)=>cont[a]-cont[b])[0];
+}
+function emFerias(e, t){
+  if(!e.feriasIni || !e.feriasFim) return false;
+  return t >= fromIso(e.feriasIni) && t <= fromIso(e.feriasFim);
+}
+
+// ---------- gerador da escala ----------
+// Começa 8 semanas antes do mês pra contagem de dias seguidos e o rodízio virem "aquecidos".
+function gerar(mes){
+  const [y,m] = mes.split('-').map(Number);
+  const first = Date.UTC(y, m-1, 1);
+  const last = Date.UTC(y, m, 0);
+  const firstMon = first - mod(dow(first)-1, 7) * DAY;
+  const lastSun = last + mod(7 - dow(last), 7) * DAY;
+  const inicio = firstMon - 8 * 7 * DAY;
+  if(modelo12()){
+    const g = { first, last, firstMon, lastSun, inicio };
+    g.base = gerar12(g);
+    return g;
+  }
+
+  // quem tem padrão fixo (cobridor da noite e folga fixa) entra primeiro, pra os demais escolherem folgas sabendo disso
+  const rv = revez();
+  const fsId = rv ? rv.frentistaSabado : null;
+  const fases = fasesRodizio();
+  const cobIds = [cobridor('pista'), cobridor('caixas')].filter(Boolean).map(e=>e.id).concat(rv ? rv.ids : []).concat(fsId ? [fsId] : []).concat(Object.keys(fases).map(Number));
+  const fixo = e => (cobIds.includes(e.id) || e.folgaFixa) ? 0 : 1;
+  const emps = state.employees.slice().sort((a,b)=>
+    fixo(a)-fixo(b) || a.setor.localeCompare(b.setor) || periodo(a.turno).localeCompare(periodo(b.turno)) ||
+    horaEntrada(a.turno)-horaEntrada(b.turno) || a.id-b.id);
+  const run = {}, ultimoPar = {};
+  emps.forEach(e=>{ run[e.id]=0; ultimoPar[e.id]=''; });
+  const base = {};
+  const cob = { pista: cobridor('pista'), caixas: cobridor('caixas') };
+
+  for(let ws = inicio; ws <= lastSun; ws += 7*DAY){
+    const grupoDomingo = GRUPOS[mod(semanaIdx(ws), 3)];
+    const folgasNoPeriodo = {};
+    emps.forEach(e=>{
+      const bucket = e.setor + '|' + periodo(e.turno);
+      const cnt = folgasNoPeriodo[bucket] = folgasNoPeriodo[bucket] || [0,0,0,0,0,0,0];
+      const dias = [0,1,2,3,4,5,6].map(d=> ws + d*DAY);
+      const ferias = dias.map(t=> emFerias(e, t));
+      const c = cob[e.setor];
+      // no domingo de folga do cobridor (e quando ele está de férias no domingo), o titular da noite faz o domingo
+      const cobSemDomingo = c && (c.domingo === grupoDomingo || emFerias(c, ws + 6*DAY));
+      let estados = null, par = null;
+      if(rv && rv.ids.includes(e.id)){
+        const vez = rv[turmaDaSemana(rv, ws)];
+        const papel = vez.dia===e.id ? 'D' : vez.noite===e.id ? 'N' : null;
+        if(papel === 'D'){
+          // turma da vez, plantão do dia: Seg, Sex e Sáb no turno dela, Ter a Qui de folga, domingo 07:00 às 19:00
+          estados = ['T','F','F','F','T','T','D'];
+        } else if(papel === 'N'){
+          // turma da vez, plantão da noite: Seg, Sex e Sáb no turno dela, domingo 19:00 às 06:00;
+          // se o titular da noite faz o sábado, este cobre a folga dele na quarta à noite (22:00 às 06:00)
+          estados = rv.titularSabado ? ['T','F','N','F','T','T','N'] : ['T','F','F','F','T','T','N'];
+        } else {
+          // turma de folga: Seg de folga (descanso depois da noite de domingo), Ter a Sex no turno, Sáb e Dom de folga
+          estados = ['F','T','T','T','T','F','F'];
+        }
+      } else if(titularSabado(e)){
+        // titular da noite dos caixas: trabalha o sábado à noite e folga quarta e domingo
+        estados = ['T','T','F','T','T','T','F'];
+      } else if(c && e.id === c.id){
+        // Semana normal: Seg e Ter de folga (descanso depois da noite de domingo), Qua a Sex no turno dele, Sáb e Dom à noite.
+        // Semana do domingo de folga dele: Seg de folga, Ter a Qui no turno dele, Sex e Sáb à noite, Dom de folga.
+        estados = c.domingo === grupoDomingo
+          ? ['F','T','T','T','N','N','F']
+          : ['F','F','T','T','T','N','N'];
+      } else if(fases[e.id] !== undefined){
+        const ini = RODIZIO_INICIO[mod(semanaIdx(ws) + fases[e.id], 4)];
+        estados = [0,1,2,3,4,5,6].map(d=> (d===ini || d===ini+1) ? 'F' : 'T');
+      } else if(e.folgaFixa && periodo(e.turno)==='noite' && cobSemDomingo){
+        // titular da noite: nessa semana folga Sex e Sáb (o cobridor faz essas noites) e trabalha o domingo
+        estados = ['T','T','T','T','F','F','T'];
+      } else if(e.folgaFixa){
+        par = [5,6];
+      } else {
+        const folgaDomingo = e.domingo === grupoDomingo;
+        let melhor = null, melhorNota = Infinity;
+        const cobreSabado = e.id === fsId;
+        // frentistas: folgas em dois dias seguidos em toda semana que não é a do domingo de folga
+        // (na semana do domingo, a 2ª folga vai para o dia que mantém a pista cheia)
+        let exigirSeguidas = e.setor==='pista' && !folgaDomingo && !cobreSabado;
+        for(let tentativa=0; tentativa<2 && !melhor; tentativa++, exigirSeguidas=false)
+        for(let i=0;i<7;i++) for(let j=i+1;j<7;j++){
+          if(exigirSeguidas && j-i !== 1) continue;
+          // quem faz o caixa no sábado à noite folga o domingo e mais um dia de segunda a sexta
+          if(cobreSabado){ if(j!==6 || i===5) continue; }
+          else if(folgaDomingo ? j!==6 : j===6) continue;
+          // não pode passar de 6 dias seguidos trabalhando
+          let r = run[e.id], estoura = false;
+          for(let d=0; d<7; d++){
+            if(ferias[d] || d===i || d===j) r = 0; else if(++r > 6) estoura = true;
+          }
+          const nota = (estoura ? 1000 : 0)
+            + ((ferias[i]?50:0) + (ferias[j]?50:0))
+            + (cnt[i] + cnt[j]) * 10              // espalha as folgas no período
+            + (j - i === 1 ? 0 : 3)               // prefere folgas em dias seguidos
+            + (ultimoPar[e.id] === i+','+j ? 4 : 0) // varia em relação à semana anterior
+            + ((i*3 + j + e.id) % 7) * 0.01;      // desempate fixo
+          if(nota < melhorNota){ melhorNota = nota; melhor = [i,j]; }
+        }
+        par = melhor;
+      }
+      if(!estados) estados = [0,1,2,3,4,5,6].map(d=> par.includes(d) ? 'F' : 'T');
+      if(e.id === fsId && estados[5] === 'T') estados[5] = 'C';
+      ultimoPar[e.id] = estados.map((s,d)=> s==='F' ? d : '').filter(x=>x!=='').join(',');
+      dias.forEach((t,d)=>{
+        const st = ferias[d] ? 'V' : estados[d];
+        base[e.id + '|' + toIso(t)] = st;
+        if(st==='F' || st==='N') cnt[d]++; // na noite ele sai do turno de origem
+        run[e.id] = trabalha(st) ? run[e.id]+1 : 0;
+      });
+    });
+  }
+  return { base, first, last, firstMon, lastSun, inicio };
+}
+
+function valor(g, id, t){
+  const k = id + '|' + toIso(t);
+  const b = g.base[k] || 'T';
+  if(b === 'V') return 'V';
+  return state.overrides[k] || b;
+}
+
+// ---------- conferência das regras ----------
+function conferir(e, g){
+  const avisos = [];
+  for(let ws = g.firstMon; ws <= g.lastSun; ws += 7*DAY){
+    let f=0, v=0;
+    for(let d=0; d<7; d++){ const s = valor(g, e.id, ws+d*DAY); if(s==='F') f++; if(s==='V') v++; }
+    if(v===0 && f<2) avisos.push(`Semana de ${ddmm(ws)}: ${f} folga${f===1?'':'s'} (mínimo 2)`);
+  }
+  let run = 0, marcou = false;
+  for(let t = g.inicio; t <= g.lastSun; t += DAY){
+    run = trabalha(valor(g, e.id, t)) ? run+1 : 0;
+    if(run===7 && t>=g.firstMon && !marcou){ avisos.push(`Mais de 6 dias seguidos de trabalho (até ${ddmm(t)})`); marcou = true; }
+  }
+  // no 5x2 a jornada diária normal vai até 8h (+2h extras); acima disso a semana passa do limite
+  if(!modelo12()){
+    const [ent, sai] = partesTurno(e.turno);
+    const dur = mod(minutos(sai) - minutos(ent), 1440) / 60;
+    if(dur > 10) avisos.push(`Turno de ${String(dur).replace('.', ',')}h no 5x2 (${e.turno}): passa de 10h por dia e de 42h na semana`);
+  }
+  avisosIntervalo(e).forEach(a=> avisos.push(a));
+  if(modelo12()){
+    const h = horarioDe(e), dt = duracaoTurnoMin(h), it = intervaloDe(e);
+    const pausa = it && !it.indenizado ? mod(minutos(it.fim) - minutos(it.ini), 1440) : 0;
+    const trab = dt - pausa;
+    if(trab > 720) avisos.push(`${String(trab/60).replace('.', ',')}h trabalhadas no plantão (${h}); o 12x36 é de 12h`);
+  }
+  let domF = 0, domTotal = 0, domV = 0;
+  for(let t = g.first; t <= g.last; t += DAY){
+    if(dow(t)!==0) continue;
+    domTotal++;
+    const s = valor(g, e.id, t);
+    if(s==='F') domF++;
+    if(s==='V') domV++;
+  }
+  if(domF===0 && domV<domTotal) avisos.push('Nenhuma folga em domingo no mês');
+  let seq = 0, marcou3 = false;
+  // no rodízio de 4 semanas o domingo cai uma vez por mês: não se aplica o aviso de 3 domingos seguidos
+  const noRodizio = fasesRodizio()[e.id] !== undefined;
+  if(!noRodizio)
+  for(let t = g.inicio + mod(7 - dow(g.inicio), 7)*DAY; t <= g.lastSun; t += 7*DAY){
+    seq = trabalha(valor(g, e.id, t)) ? seq+1 : 0;
+    if(seq===3 && t>=g.firstMon && !marcou3){ avisos.push(`3 domingos seguidos trabalhando (até ${ddmm(t)}); a regra do comércio pede folga no domingo a cada 3 semanas`); marcou3 = true; }
+  }
+  return { avisos, domF };
+}
+
+// ---------- tela ----------
+function ordenar(lista){
+  if(modelo12()){
+    const d12 = distribuicao12();
+    const k = e => (d12[e.id].turno==='dia' ? 0 : 2) + (d12[e.id].turma==='A' ? 0 : 1);
+    return lista.sort((a,b)=> k(a)-k(b) || horaEntrada(a.turno)-horaEntrada(b.turno) || a.nome.localeCompare(b.nome));
+  }
+  const ordemP = {manha:0, tarde:1, noite:2};
+  return lista.sort((a,b)=> ordemP[periodo(a.turno)]-ordemP[periodo(b.turno)] || horaEntrada(a.turno)-horaEntrada(b.turno) || a.nome.localeCompare(b.nome));
+}
+
+// Painel do revezamento de fim de semana (só na aba Caixas)
+function renderRevez(g){
+  const box = document.getElementById('revez');
+  if(ui.setor !== 'caixas' || modelo12()){ box.hidden = true; return; }
+  box.hidden = false;
+  const r = state.revezCaixas || JSON.parse(JSON.stringify(REVEZ_PADRAO));
+  const rv = revez();
+  const caixas = ordenar(state.employees.filter(e=>e.setor==='caixas' && !e.folgaFixa));
+  const sel = (id, valor) => `<select id="${id}"><option value="">Escolha…</option>${caixas.map(e=>`<option value="${e.id}" ${Number(valor)===e.id?'selected':''}>${esc(e.nome)}</option>`).join('')}</select>`;
+  const nome = id => { const e = state.employees.find(x=>x.id===id); return e ? e.nome.split(' ')[0] : '?'; };
+  let fds = '';
+  if(rv){
+    const itens = [];
+    for(let t = g.first; t <= g.last; t += DAY){
+      if(dow(t)!==0) continue;
+      const tur = turmaDaSemana(rv, t - 6*DAY);
+      itens.push(`${ddmm(t - DAY)} e ${ddmm(t)}: Turma ${tur==='t1'?'1':'2'} (${nome(rv[tur].dia)} e ${nome(rv[tur].noite)})`);
+    }
+    fds = `<div class="fds"><b>Fins de semana de ${nomeMes(ui.mes)}:</b> ${itens.join(' · ')}</div>`;
+  } else if(r.ativo){
+    fds = `<div class="erro">Escolha 4 caixas diferentes (sem folga fixa) para as duas turmas. Enquanto isso, o revezamento fica desligado.</div>`;
+  }
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h3>Revezamento de fim de semana dos caixas</h3>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <label class="check"><input type="checkbox" id="rv-ativo" ${r.ativo?'checked':''}> Ativo</label>
+        <label class="check"><input type="checkbox" id="rv-inverter" ${r.inverter?'checked':''}> Inverter a turma da vez</label>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);">
+      <label for="rv-sabado">Caixa na noite de sábado</label>
+      <select id="rv-sabado">
+        <option value="frentista" ${(r.noiteSabado||'frentista')==='frentista'?'selected':''}>Um frentista cobre (22:00 às 06:00)</option>
+        <option value="titular" ${r.noiteSabado==='titular'?'selected':''}>Titular da noite trabalha sábado e folga quarta e domingo</option>
+        <option value="descoberta" ${r.noiteSabado==='descoberta'?'selected':''}>Fica descoberta</option>
+      </select>
+      ${(r.noiteSabado||'frentista')==='frentista' ? `<select id="rv-frentista" aria-label="Frentista que cobre o caixa no sábado à noite"><option value="">Escolha o frentista…</option>${
+        ordenar(state.employees.filter(e=> e.setor==='pista' && !e.folgaFixa && !(cobridorPista() && cobridorPista().id===e.id)))
+          .map(e=>`<option value="${e.id}" ${Number(r.frentistaSabado)===e.id?'selected':''}>${esc(e.nome)} (${esc(e.turno)})</option>`).join('')
+      }</select>` : ''}
+    </div>
+    ${(r.noiteSabado||'frentista')==='frentista' && !(rv && rv.frentistaSabado) ? `<div class="erro">Escolha o frentista que cobre o caixa no sábado à noite.</div>` : ''}
+    ${(r.noiteSabado||'frentista')==='frentista' && rv && rv.frentistaSabado ? `<div class="fds">O frentista faz o caixa das 22:00 às 06:00 todo sábado, folga o domingo e mais um dia da semana. Na pista, ele aparece com <b>C</b> no sábado.</div>` : ''}
+    <div class="turmas">
+      <div class="turma"><b>Turma 1</b>
+        <label>07:00 às 19:00 ${sel('rv-t1-dia', r.t1&&r.t1.dia)}</label>
+        <label>19:00 às 06:00 ${sel('rv-t1-noite', r.t1&&r.t1.noite)}</label>
+      </div>
+      <div class="turma"><b>Turma 2</b>
+        <label>07:00 às 19:00 ${sel('rv-t2-dia', r.t2&&r.t2.dia)}</label>
+        <label>19:00 às 06:00 ${sel('rv-t2-noite', r.t2&&r.t2.noite)}</label>
+      </div>
+    </div>
+    ${fds}
+    <div class="fds">O plantão de 12 horas é só no domingo; no sábado cada um faz o próprio turno. Monte cada turma com um caixa da manhã e um da tarde: na semana em que uma turma folga o fim de semana, ela cobre sozinha a manhã e a tarde de terça a sexta.</div>`;
+}
+
+// Painel do 12x36 (aparece nas duas abas quando o modelo 12x36 está escolhido)
+function render12Painel(){
+  const box = document.getElementById('doze');
+  if(!modelo12()){ box.hidden = true; return; }
+  box.hidden = false;
+  const cfg = cfg12(), d12 = distribuicao12();
+  const conta = (setor, turno, turma) => state.employees.filter(e=> e.setor===setor && d12[e.id].turno===turno && (!turma || d12[e.id].turma===turma)).length;
+  const par = (setor, turno) => { const a = conta(setor,turno,'A'), b = conta(setor,turno,'B'); const txt = `turma A ${a}, B ${b}`; return Math.abs(a-b) > 1 ? `<span class="erro">${txt}: desequilibrado, um dia fica com ${Math.abs(a-b)} a menos</span>` : txt; };
+  const linha = setor => `${SETORES[setor]}: dia ${conta(setor,'dia')} pessoas (${par(setor,'dia')}) · noite ${conta(setor,'noite')} pessoas (${par(setor,'noite')})`;
+  const nManual = Object.keys(cfg.manual||{}).length;
+  box.innerHTML = `
+    <h3>Escala 12x36</h3>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-soft);">
+      <label for="dz-noite-pista">Frentistas na noite</label>
+      <input type="number" min="0" step="2" id="dz-noite-pista" value="${cfg.posNoite.pista*2}" style="width:56px;border:1px solid var(--rule);border-radius:6px;padding:5px 7px;">
+      <label for="dz-noite-caixas">Caixas na noite</label>
+      <input type="number" min="0" step="2" id="dz-noite-caixas" value="${cfg.posNoite.caixas*2}" style="width:56px;border:1px solid var(--rule);border-radius:6px;padding:5px 7px;">
+      <span>Regra: <b>${cfg.posNoite.pista*2} frentista${cfg.posNoite.pista*2===1?'':'s'} e ${cfg.posNoite.caixas*2} caixa${cfg.posNoite.caixas*2===1?'':'s'} na noite</b>, metade em dia sim e metade em dia não (${cfg.posNoite.pista} frentista e ${cfg.posNoite.caixas} caixa por noite).</span>
+      ${nManual ? `<button type="button" class="btn btn-light" id="dz-auto" style="padding:5px 10px;">Voltar à distribuição automática (${nManual} ajuste${nManual>1?'s':''})</button>` : ''}
+    </div>
+    <div class="turmas">
+      ${['pista','caixas'].map(setor=>{
+        const h = inicios12(setor), hf = horario12(setor), aviso = checarHorario12(setor);
+        return `<div class="turma"><b>Horários · ${setor==='pista'?'Pista':'Caixas'}</b>
+          <label>Dia começa às <input type="time" step="900" id="dz-${setor}-dia" value="${h.dia}" style="border:1px solid var(--rule);border-radius:6px;padding:4px 6px;"></label>
+          <label>Noite começa às <input type="time" step="900" id="dz-${setor}-noite" value="${h.noite}" style="border:1px solid var(--rule);border-radius:6px;padding:4px 6px;"></label>
+          <span style="font-size:11.5px;color:var(--ink-soft);">Dia ${hf.dia} · noite ${hf.noite}</span>
+          ${aviso ? `<span class="erro" style="font-size:11.5px;">${aviso}</span>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="fds">${linha('pista')}<br>${linha('caixas')}</div>
+    <div class="fds"><b>Em ${nomeMes(ui.mes)}:</b> turma A trabalha nos dias ${diasDaTurma('A', ui.mes)} e turma B nos dias ${diasDaTurma('B', ui.mes)}. Para trocar alguém de turma, clique na etiqueta da turma ao lado do nome. ${(()=>{ const [y,m] = ui.mes.split('-').map(Number); return new Date(Date.UTC(y,m,0)).getUTCDate()===31 ? 'Este mês tem 31 dias: o dia 31 e o dia 1 do mês seguinte são seguidos, então no próximo mês as turmas invertem par e ímpar.' : ''; })()}</div>
+    <div class="fds"><b>Jornada:</b> ${intervalo12Min() ? `${String(span12()/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
+    <div class="fds">Cada um trabalha 12 horas e descansa no dia seguinte (dia sim, dia não). A turma A trabalha num dia e a B no outro, então cada posto precisa de 2 pessoas no dia e 2 na noite. Vão pra noite os de turno mais tarde; para trocar alguém de turno ou de turma, clique no nome. Cada um folga um domingo a cada 2 semanas.</div>
+    <label class="check" style="font-size:12.5px;"><input type="checkbox" id="dz-indenizado" ${cfg.intervaloIndenizado?'checked':''}> Intervalo indenizado no 12x36 (pago, sem parar o trabalho; a lei permite no 12x36)</label>
+    <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>`;
+}
+
+// Quem está trabalhando num período: os do próprio turno com T, e na noite também quem está cobrindo (N).
+function contarNoPeriodo(lista, g, p, t){
+  if(modelo12()){
+    const alvo = p==='dia' ? 'D' : p==='noite' ? 'N' : null;
+    return lista.filter(e=> valor(g, e.id, t) === alvo).length;
+  }
+  let n = lista.filter(e=>{
+    const s = valor(g, e.id, t);
+    return (periodo(e.turno)===p && s==='T') || (p==='noite' && s==='N') || (p!=='noite' && s==='D');
+  }).length;
+  // no caixa da noite também conta o frentista que está cobrindo (C)
+  if(p==='noite' && lista.length && lista[0].setor==='caixas'){
+    n += state.employees.filter(e=> e.setor!=='caixas' && valor(g, e.id, t)==='C').length;
+  }
+  return n;
+}
+
+function render(){
+  const g = ultimaGeracao = gerar(ui.mes);
+  // seletor de quem cobre a noite no fim de semana (do setor aberto)
+  const selCobre = document.getElementById('f-cobre');
+  const atualCob = cobridor(ui.setor);
+  const rvTela = ui.setor==='caixas' ? revez() : null;
+  const selModo = document.getElementById('f-modo');
+  selModo.value = rodizioAtivo() ? 'rodizio4' : 'equilibrado';
+  selModo.hidden = document.getElementById('lbl-modo').hidden = ui.setor !== 'pista' || modelo12();
+  selCobre.hidden = document.querySelector('label[for="f-cobre"]').hidden = modelo12();
+  document.getElementById('f-modelo').value = modelo12() ? '12x36' : '5x2';
+  document.getElementById('f-int').value = String(Number(state.intervaloMin) || 60);
+  render12Painel();
+  const fasesTela = fasesRodizio();
+  selCobre.disabled = ui.setor==='caixas' && !!revez();
+  selCobre.title = selCobre.disabled ? 'Nos caixas, a noite do fim de semana é coberta pelo revezamento das turmas' : '';
+  renderRevez(g);
+  selCobre.innerHTML = `<option value="">Ninguém</option>` + ordenar(state.employees.filter(e=>e.setor===ui.setor && !e.folgaFixa))
+    .map(e=>`<option value="${e.id}" ${atualCob&&atualCob.id===e.id?'selected':''}>${esc(e.nome)} (${esc(e.turno)})</option>`).join('');
+  const dias = [];
+  for(let t = g.first; t <= g.last; t += DAY) dias.push(t);
+
+  document.getElementById('n-pista').textContent = state.employees.filter(e=>e.setor==='pista').length;
+  document.getElementById('n-caixas').textContent = state.employees.filter(e=>e.setor==='caixas').length;
+  document.querySelectorAll('.tabs button').forEach(b=> b.classList.toggle('on', b.dataset.tab===ui.setor));
+  document.getElementById('f-mes').value = ui.mes;
+  document.getElementById('sheet-title').textContent = SETORES[ui.setor] + ' · ' + nomeMes(ui.mes) + (modelo12() ? ' · 12x36' : ' · 5x2');
+  document.getElementById('print-titulo').textContent = 'POSTO TREVO · ESCALA DE TRABALHO ' + (modelo12() ? '12x36' : '5x2');
+  document.getElementById('print-sub').textContent = SETORES[ui.setor] + ' · ' + nomeMes(ui.mes) + ' · T = trabalha, F = folga';
+  document.getElementById('print-date').textContent = 'Gerado em ' + new Date().toLocaleDateString('pt-BR');
+
+  const doSetor = ordenar(state.employees.filter(e=>e.setor===ui.setor));
+  const busca = ui.busca.trim().toLowerCase();
+  const lista = busca ? doSetor.filter(e=>e.nome.toLowerCase().includes(busca)) : doSetor;
+
+  // conferência de todo o setor (não só do que a busca mostra)
+  const conf = {};
+  doSetor.forEach(e=> conf[e.id] = conferir(e, g));
+  const comAviso = doSetor.filter(e=> conf[e.id].avisos.length);
+
+  // cobertura por período
+  const periodosSetor = periodosCobertura(doSetor);
+  const d12 = modelo12() ? distribuicao12() : null;
+  const autoInt = intervalosAuto(d12);
+  const cobertura = {};
+  const diasBaixos = new Set();
+  periodosSetor.forEach(p=>{
+    cobertura[p] = dias.map(t=> contarNoPeriodo(doSetor, g, p, t));
+    const min = minimo(ui.setor, p);
+    cobertura[p].forEach((n,i)=>{ if(n < min) diasBaixos.add(p + '|' + i); });
+  });
+
+  // resumo
+  const totalFer = doSetor.filter(e=> dias.some(t=>emFerias(e,t))).length;
+  document.getElementById('summary').innerHTML = `
+    <span class="pill"><b>${doSetor.length}</b> funcionários</span>
+    <span class="pill ${comAviso.length?'bad':'ok'}"><b>${comAviso.length}</b> com regra descumprida</span>
+    <span class="pill ${diasBaixos.size?'bad':'ok'}"><b>${diasBaixos.size}</b> turno-dia abaixo do mínimo</span>
+    <span class="pill"><b>${totalFer}</b> com férias no mês</span>`;
+
+  // avisos
+  const al = document.getElementById('alerts');
+  const itens = [];
+  comAviso.forEach(e=> itens.push(`<li><b>${esc(e.nome)}</b>: ${conf[e.id].avisos.map(esc).join('; ')}</li>`));
+  periodosSetor.forEach(p=>{
+    const min = minimo(ui.setor, p);
+    const baixos = dias.filter((t,i)=> cobertura[p][i] < min);
+    if(baixos.length) itens.push(`<li><b>${NOME_PERIODO[p]}</b> abaixo do mínimo de ${min}: ${baixos.map(ddmm).join(', ')}</li>`);
+  });
+  if(itens.length){
+    al.className = 'alerts no-print';
+    al.innerHTML = `<h3>Pontos para revisar</h3><ul>${itens.join('')}</ul>`;
+  } else {
+    al.className = 'alerts ok no-print';
+    al.innerHTML = modelo12()
+      ? `<h3>Escala dentro das regras</h3>No 12x36 cada um trabalha dia sim, dia não, e folga um domingo a cada 2 semanas.`
+      : `<h3>Escala dentro das regras</h3>Todos com 2 folgas por semana, no máximo 6 dias seguidos e domingo de folga no mês.`;
+  }
+
+  // tabela
+  const wrap = document.getElementById('tablewrap');
+  if(doSetor.length===0){ wrap.innerHTML = `<div class="empty">Nenhum funcionário neste setor. Use "+ Novo funcionário".</div>`; return; }
+
+  const diaCls = t => (dow(t)===0 ? 'dom ' : '') + (dow(t)===1 ? 'seg' : '');
+  let html = `<table><thead><tr><th class="nome">Funcionário</th>`;
+  dias.forEach(t=>{ html += `<th class="${diaCls(t)}"><span>${DIA_LETRA[dow(t)]}</span><b>${new Date(t).getUTCDate()}</b></th>`; });
+  html += `<th>Dom. de folga</th></tr></thead><tbody>`;
+
+  let perAtual = null;
+  lista.forEach(e=>{
+    const grp = grupoTabela(e, d12);
+    if(grp.chave !== perAtual){
+      perAtual = grp.chave;
+      const n = doSetor.filter(x=>grupoTabela(x, d12).chave===grp.chave).length;
+      html += `<tr class="grp"><td class="nome">${grp.nome} · ${n}</td><td colspan="${dias.length+1}"></td></tr>`;
+    }
+    const c = conf[e.id];
+    const tag = d12 ? `<span class="tag tag-${d12[e.id].turno==='dia'?'a':'noite'}">12x36 · ${d12[e.id].turno==='dia'?'dia':'noite'}</span><button type="button" class="tag tag-turma tag-turma-${d12[e.id].turma}" data-turma="${e.id}" title="Clique para passar para a turma ${d12[e.id].turma==='A'?'B':'A'} (dias ${diasDaTurma(d12[e.id].turma==='A'?'B':'A', ui.mes)})">${esc(nomeTurma(d12[e.id].turma, ui.mes))} ⇄</button>` : (titularSabado(e) ? `<span class="tag tag-fixa">Folga qua e dom</span>`
+        : e.folgaFixa ? `<span class="tag tag-fixa">Folga fixa sáb/dom</span>`
+        : fasesTela[e.id] !== undefined ? `<span class="tag tag-${['a','b','c','a'][fasesTela[e.id]]}">Rodízio fase ${fasesTela[e.id]+1}</span>`
+        : `<span class="tag tag-${(e.domingo||'a').toLowerCase()}">Dom. ${esc(e.domingo)}</span>`)
+      + (atualCob && atualCob.id===e.id ? `<span class="tag tag-noite">Cobre noite sáb/dom</span>` : '')
+      + (frentistaSabado()===e.id ? `<span class="tag tag-caixa">Caixa sáb à noite</span>` : '')
+      + (rvTela && rvTela.ids.includes(e.id) ? `<span class="tag tag-noite">Turma ${rvTela.t1.dia===e.id||rvTela.t1.noite===e.id?'1':'2'} fim de semana</span>` : '');
+    html += `<tr><td class="nome">
+      <button class="emp-btn" data-edit="${e.id}" title="Editar funcionário">${esc(e.nome)}</button>
+      <div class="meta"><b style="color:var(--ink);">${esc(horarioDe(e, d12))}</b>${tag}</div>
+      ${(()=>{ const it = intervaloDe(e, d12, autoInt); return it ? `<div class="meta">${it.indenizado ? 'Intervalo indenizado' : `Intervalo <b style="color:var(--ink);">${esc(it.ini)} às ${esc(it.fim)}</b>${it.auto ? ' (automático)' : ''}`}</div>` : ''; })()}
+      ${c.avisos.length ? `<div class="warn" title="${esc(c.avisos.join('\n'))}">⚠ ${c.avisos.length} aviso${c.avisos.length>1?'s':''}</div>` : ''}
+    </td>`;
+    dias.forEach(t=>{
+      const k = e.id + '|' + toIso(t);
+      const s = valor(g, e.id, t);
+      const ov = state.overrides[k] && s!=='V';
+      const txt = s==='V' ? 'FÉ' : s;
+      const noite = (e.setor==='caixas' && revez() && dow(t)===0) ? 'plantão 19:00 às 06:00' : '22:00 às 06:00';
+      const tip = d12
+        ? `${ddmm(t)}: ${s==='D'?'plantão do dia, '+horarioDe(e, d12):s==='N'?'plantão da noite, '+horarioDe(e, d12):s==='F'?'folga':'férias'}${ov?' (ajustado à mão)':''}`
+        : `${ddmm(t)}: ${s==='T'?'trabalha no turno dele':s==='N'?'noite, '+noite:s==='D'?'plantão do domingo, 07:00 às 19:00':s==='C'?'cobre o caixa à noite, 22:00 às 06:00':s==='F'?'folga':'férias'}${ov?' (ajustado à mão)':''}`;
+      html += `<td class="c ${diaCls(t)}"><button class="cel ${s}${ov?' ov':''}" data-cel="${k}" title="${tip}" ${s==='V'?'disabled':''}>${txt}</button></td>`;
+    });
+    html += `<td class="domf ${c.domF===0?'zero':''}">${c.domF}</td></tr>`;
+  });
+  html += `</tbody><tfoot>`;
+  periodosSetor.forEach(p=>{
+    const min = minimo(ui.setor, p);
+    html += `<tr><td class="nome"><div class="lbl"><span>Trabalhando · ${NOME_PERIODO[p]}</span><label>mín.<input type="number" min="0" class="min" id="min-${ui.setor}-${p}" data-min="${p}" value="${min}"></label></div></td>`;
+    cobertura[p].forEach((n,i)=>{ html += `<td class="c ${diaCls(dias[i])} ${n<min?'low':''}">${n}</td>`; });
+    html += `<td></td></tr>`;
+  });
+  html += `</tfoot></table>`;
+  wrap.innerHTML = html;
+}
+
+// ---------- cadastro ----------
+// No 12x36, ao escolher a entrada, a saída é preenchida sozinha 12 horas depois
+function completarSaida12(){
+  if(!modelo12()) return;
+  const ent = document.getElementById('m-ent'), sai = document.getElementById('m-sai');
+  if(!ent || !sai || !/^\d{2}:\d{2}/.test(ent.value)) return;
+  sai.value = hhmm(minutos(ent.value.slice(0,5)) + span12());
+}
+function abrirModal(id){
+  ui.editId = id || null;
+  const e = id ? state.employees.find(x=>x.id===id) : null;
+  const turnos = TURNOS.slice();
+  if(e && !turnos.includes(e.turno)) turnos.push(e.turno);
+  const m12 = (e && (cfg12().manual||{})[e.id]) || {};
+  const horaAtual = partesTurno(e ? horarioDe(e) : (modelo12() ? horario12(ui.setor).dia : '06:00 às 14:00'));
+  const intManual = e && e.intervalos && e.intervalos[chaveModelo()];
+  const intAuto = e ? intervalosAuto(modelo12() ? distribuicao12() : null)[e.id] : null;
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>${e ? 'Editar funcionário' : 'Novo funcionário'}</h3><button type="button" id="m-fechar" aria-label="Fechar">×</button></div>
+      <form id="m-form">
+        <div class="field"><label for="m-nome">Nome completo</label><input id="m-nome" required value="${e?esc(e.nome):''}"></div>
+        <div class="row2">
+          <div class="field"><label for="m-setor">Setor</label>
+            <select id="m-setor"><option value="pista">Pista</option><option value="caixas">Caixas</option></select></div>
+          <div class="field"><label for="m-ent">Entrada${modelo12() ? ' no 12x36' : ''}</label><input type="time" id="m-ent" required value="${horaAtual[0]}"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="m-sai">Saída${modelo12() ? ' no 12x36' : ''}</label><input type="time" id="m-sai" required value="${horaAtual[1]}"></div>
+          <div class="field"><label for="m-atalho">Ou escolha um turno</label>
+            <select id="m-atalho"><option value="">Turnos usados no posto…</option>${turnos.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="m-int-ini">Intervalo: início</label><input type="time" id="m-int-ini" value="${intManual ? esc(intManual.ini) : ''}"></div>
+          <div class="field"><label for="m-int-fim">Intervalo: fim</label><input type="time" id="m-int-fim" value="${intManual ? esc(intManual.fim) : ''}"></div>
+        </div>
+        <div class="hint" style="font-size:11.5px;color:var(--ink-soft);margin-top:-6px;line-height:1.45;">
+          ${modelo12() && cfg12().intervaloIndenizado ? 'No 12x36 o intervalo está marcado como indenizado (painel do 12x36).'
+            : `Em branco, o app escolhe sozinho${intAuto ? ` (hoje: <b>${esc(intAuto.ini)} às ${esc(intAuto.fim)}</b>)` : ''}. Ao escolher o início, o fim é preenchido com a duração padrão.`}
+        </div>
+        <div class="hint" style="font-size:11.5px;color:var(--ink-soft);margin-top:-6px;line-height:1.45;">
+          Este horário vale para a escala <b>${modelo12() ? '12x36' : '5x2'}</b>, que está aberta agora.${modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha ${span12()/60 === 12 ? '12 horas' : String(span12()/60).replace('.', ',') + ' horas'} depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
+          ${e ? (modelo12() ? `No 5x2 ele continua ${esc(e.turno)}.` : `No 12x36: ${e.h12 ? esc(e.h12.ini + ' às ' + e.h12.fim) : 'horário do setor'}.`) : ''}
+        </div>
+        <div class="field"><label for="m-domingo">Grupo de domingo</label>
+          <select id="m-domingo">
+            <option value="">Automático (grupo com menos gente no período)</option>
+            ${GRUPOS.map(gp=>`<option value="${gp}" ${e&&e.domingo===gp?'selected':''}>Grupo ${gp}</option>`).join('')}
+          </select>
+          <div class="hint">Cada grupo folga um domingo a cada 3 semanas. Deixe os grupos equilibrados dentro de cada período.</div>
+        </div>
+        <label class="check"><input type="checkbox" id="m-fixa" ${e&&e.folgaFixa?'checked':''}> Folga fixa no sábado e no domingo</label>
+        <div class="row2" ${modelo12() ? '' : 'hidden'}>
+          <div class="field"><label for="m-12turno">No 12x36: turno</label>
+            <select id="m-12turno">
+              <option value="">Automático</option>
+              <option value="dia" ${m12.turno==='dia'?'selected':''}>Dia</option>
+              <option value="noite" ${m12.turno==='noite'?'selected':''}>Noite</option>
+            </select></div>
+          <div class="field"><label for="m-12turma">No 12x36: turma</label>
+            <select id="m-12turma">
+              <option value="">Automática</option>
+              <option value="A" ${m12.turma==='A'?'selected':''}>${esc(nomeTurma('A', ui.mes))}</option>
+              <option value="B" ${m12.turma==='B'?'selected':''}>${esc(nomeTurma('B', ui.mes))}</option>
+            </select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="m-fer-ini">Férias: início</label><input type="date" id="m-fer-ini" value="${e?esc(e.feriasIni||''):''}"></div>
+          <div class="field"><label for="m-fer-fim">Férias: fim</label><input type="date" id="m-fer-fim" value="${e?esc(e.feriasFim||''):''}"></div>
+        </div>
+        <div class="modal-actions">
+          ${e ? `<button type="button" class="btn btn-danger" id="m-excluir">Excluir</button>` : '<span></span>'}
+          <div><button type="button" class="btn btn-light" id="m-cancelar">Cancelar</button><button type="submit" class="btn btn-amber">Salvar</button></div>
+        </div>
+      </form>
+    </div>
+  </div>`;
+  document.getElementById('m-setor').value = e ? e.setor : ui.setor;
+  document.getElementById('m-nome').focus();
+}
+function fecharModal(){ ui.editId = null; document.getElementById('modal-root').innerHTML = ''; }
+
+function salvarModal(ev){
+  ev.preventDefault();
+  const nome = document.getElementById('m-nome').value.trim().toUpperCase();
+  if(!nome) return;
+  const setor = document.getElementById('m-setor').value;
+  const ent = document.getElementById('m-ent').value.slice(0,5), sai = document.getElementById('m-sai').value.slice(0,5);
+  if(!ent || !sai){ alert('Informe o horário de entrada e de saída.'); return; }
+  const digitado = ent + ' às ' + sai;
+  const e0 = ui.editId ? state.employees.find(x=>x.id===ui.editId) : null;
+  // o horário digitado vale para o modelo que está aberto; o do outro modelo fica como estava
+  let turno = e0 ? e0.turno : digitado;
+  let h12 = e0 ? (e0.h12 || null) : null;
+  let turno12auto = '';
+  if(modelo12()){
+    const padrao = horario12(setor);
+    if(digitado === padrao.dia){ h12 = null; turno12auto = 'dia'; }
+    else if(digitado === padrao.noite){ h12 = null; turno12auto = 'noite'; }
+    else {
+      h12 = { ini:ent, fim:sai };
+      const h = horaEntrada(ent);
+      turno12auto = (h >= 15 || h < 4) ? 'noite' : 'dia'; // entrada à tarde/noite = plantão da noite
+    }
+    if(e0 && digitado === horarioDe(e0)) turno12auto = ''; // não mexeu no horário
+  } else {
+    turno = digitado;
+  }
+  const iIni = document.getElementById('m-int-ini').value.slice(0,5), iFim = document.getElementById('m-int-fim').value.slice(0,5);
+  if(!!iIni !== !!iFim){ alert('Informe o início e o fim do intervalo, ou deixe os dois em branco para o automático.'); return; }
+  const intervalos = { ...((e0 && e0.intervalos) || {}) };
+  if(iIni) intervalos[chaveModelo()] = { ini:iIni, fim:iFim }; else delete intervalos[chaveModelo()];
+  const folgaFixa = document.getElementById('m-fixa').checked;
+  let feriasIni = document.getElementById('m-fer-ini').value;
+  let feriasFim = document.getElementById('m-fer-fim').value;
+  if(feriasIni && !feriasFim) feriasFim = feriasIni;
+  if(feriasFim && !feriasIni) feriasIni = feriasFim;
+  if(feriasIni && feriasFim < feriasIni){ alert('A data de fim das férias está antes do início.'); return; }
+  const id = ui.editId || (Math.max(0, ...state.employees.map(x=>x.id)) + 1);
+  const domingo = document.getElementById('m-domingo').value || grupoMenosUsado(setor, turno, id);
+  const dados = { id, nome, setor, turno, folgaFixa, feriasIni, feriasFim, domingo, h12, intervalos };
+  if(ui.editId){
+    state.employees = state.employees.map(x=> x.id===id ? {...x, ...dados} : x);
+  } else {
+    state.employees.push(dados);
+  }
+  // escolha de turno e turma do 12x36 (vazio = automático)
+  const t12 = document.getElementById('m-12turno').value || turno12auto;
+  const tu12 = document.getElementById('m-12turma').value;
+  let manual = cfg12().manual = cfg12().manual || {};
+  const antes = ui.editId && modelo12() ? distribuicao12()[id] : null;
+  if(antes && tu12 && tu12 !== antes.turma){ congelar12(setor); manual = cfg12().manual; }
+  if(t12 || tu12) manual[id] = { ...(manual[id]||{}), ...(t12 ? {turno:t12} : {}), ...(tu12 ? {turma:tu12} : {}) };
+  else delete manual[id];
+  salvar(); fecharModal(); render();
+}
+
+function excluir(){
+  const e = state.employees.find(x=>x.id===ui.editId);
+  if(!e || !confirm(`Remover ${e.nome} da escala?`)) return;
+  state.employees = state.employees.filter(x=>x.id!==e.id);
+  Object.keys(state.overrides).forEach(k=>{ if(k.startsWith(e.id+'|')) delete state.overrides[k]; });
+  if(state.coberturaNoite && state.coberturaNoite[e.setor]===e.id) state.coberturaNoite[e.setor] = null;
+  if(state.doze && state.doze.manual) delete state.doze.manual[e.id];
+  salvar(); fecharModal(); render();
+}
+
+// ---------- exportar ----------
+function exportarExcel(){
+  const g = gerar(ui.mes);
+  const dias = [];
+  for(let t = g.first; t <= g.last; t += DAY) dias.push(t);
+  const wb = XLSX.utils.book_new();
+  Object.keys(SETORES).forEach(setor=>{
+    const lista = ordenar(state.employees.filter(e=>e.setor===setor));
+    const d12x = modelo12() ? distribuicao12() : null;
+    const autoX = intervalosAuto(d12x);
+    const cab = ['Turno','Intervalo','Funcionário', d12x ? '12x36' : 'Grupo domingo', ...dias.map(t=> ddmm(t)+' '+['dom','seg','ter','qua','qui','sex','sáb'][dow(t)]), 'Domingos de folga'];
+    const linhas = [cab];
+    lista.forEach(e=>{
+      const c = conferir(e, g);
+      const itx = intervaloDe(e, d12x, autoX);
+      linhas.push([horarioDe(e, d12x), itx ? (itx.indenizado ? 'Indenizado' : itx.ini + ' às ' + itx.fim) : '-', e.nome,
+        d12x ? (d12x[e.id].turno==='dia' ? 'Dia' : 'Noite') + ' turma ' + d12x[e.id].turma : e.folgaFixa ? 'Folga fixa' : e.domingo,
+        ...dias.map(t=>{ const s = valor(g, e.id, t); return s==='V' ? 'FÉRIAS' : s==='N' ? 'NOITE' : s==='D' ? 'DIA 12H' : s==='C' ? 'CAIXA NOITE' : s; }), c.domF]);
+    });
+    linhas.push([]);
+    periodosCobertura(lista).forEach(p=>{
+      linhas.push(['', '', 'Trabalhando · ' + NOME_PERIODO[p], '', ...dias.map(t=> contarNoPeriodo(lista, g, p, t)), '']);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(linhas);
+    ws['!cols'] = [{wch:15},{wch:15},{wch:36},{wch:12}, ...dias.map(()=>({wch:9})), {wch:10}];
+    XLSX.utils.book_append_sheet(wb, ws, setor==='pista' ? 'Pista' : 'Caixas');
+  });
+  XLSX.writeFile(wb, `escala-${ui.mes}.xlsx`);
+}
+
+// ---------- PDF: um ou mais meses, pista e caixas no mesmo arquivo ----------
+function proximoMes(mes, n){
+  const [y,m] = mes.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m-1+n, 1));
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0');
+}
+function abrirModalPdf(){
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Exportar escala em PDF</h3><button type="button" id="m-fechar" aria-label="Fechar">×</button></div>
+      <form id="pdf-form">
+        <div class="row2">
+          <div class="field"><label for="pdf-de">Do mês</label><input type="month" id="pdf-de" required value="${ui.mes}"></div>
+          <div class="field"><label for="pdf-ate">Até o mês</label><input type="month" id="pdf-ate" required value="${ui.mes}"></div>
+        </div>
+        <div class="field">
+          <label>Setores no PDF</label>
+          <div style="display:flex;gap:18px;">
+            <label class="check"><input type="checkbox" id="pdf-pista" checked> Pista</label>
+            <label class="check"><input type="checkbox" id="pdf-caixas" checked> Caixas</label>
+          </div>
+          <div class="hint">Cada mês sai com uma página para cada setor marcado, todas no mesmo arquivo. Para um mês só, deixe "do mês" e "até o mês" iguais.</div>
+        </div>
+        <div class="field-error" id="pdf-erro" style="color:var(--low);font-size:12px;font-weight:600;" hidden></div>
+        <div class="modal-actions">
+          <span></span>
+          <div><button type="button" class="btn btn-light" id="m-cancelar">Cancelar</button><button type="submit" class="btn btn-amber">Gerar PDF</button></div>
+        </div>
+      </form>
+    </div>
+  </div>`;
+}
+function gerarPdfDoModal(ev){
+  ev.preventDefault();
+  const de = document.getElementById('pdf-de').value;
+  const ate = document.getElementById('pdf-ate').value;
+  const setores = ['pista','caixas'].filter(s=> document.getElementById('pdf-'+s).checked);
+  const erro = document.getElementById('pdf-erro');
+  const falha = msg => { erro.textContent = msg; erro.hidden = false; };
+  if(!de || !ate) return falha('Escolha os meses.');
+  if(ate < de) return falha('O mês final está antes do inicial.');
+  if(!setores.length) return falha('Marque pelo menos um setor.');
+  const meses = [];
+  for(let m = de; m <= ate && meses.length < 13; m = proximoMes(m, 1)) meses.push(m);
+  if(meses.length > 12) return falha('Escolha no máximo 12 meses por vez.');
+  exportarPdf(meses, setores);
+  fecharModal();
+}
+
+function exportarPdf(meses, setores){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  const COR = {
+    T:{fill:[187,235,204], text:[20,95,52]},
+    F:{fill:[248,190,198], text:[150,20,40]},
+    N:{fill:[49,46,129],   text:[255,255,255]},
+    D:{fill:[14,116,144],  text:[255,255,255]},
+    C:{fill:[180,83,9],    text:[255,255,255]},
+    'FÉ':{fill:[253,240,213], text:[154,91,10]},
+  };
+  const geradoEm = 'Gerado em ' + new Date().toLocaleDateString('pt-BR');
+  let primeira = true;
+
+  meses.forEach(mes=>{
+    const g = gerar(mes);
+    const dias = [];
+    for(let t = g.first; t <= g.last; t += DAY) dias.push(t);
+
+    setores.forEach(setor=>{
+      const lista = ordenar(state.employees.filter(e=>e.setor===setor));
+      if(!lista.length) return;
+      if(!primeira) doc.addPage();
+      primeira = false;
+      const cob = cobridor(setor);
+      
+
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,27,75);
+      doc.text('POSTO TREVO · ESCALA DE TRABALHO ' + (modelo12() ? '12x36' : '5x2'), 8, 11);
+      doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(27,32,51);
+      const titulo = SETORES[setor] + ' · ' + nomeMes(mes);
+      doc.text(titulo.charAt(0).toUpperCase() + titulo.slice(1), 8, 17);
+      doc.setFontSize(7.5); doc.setTextColor(94,102,128);
+      doc.text(modelo12()
+        ? 'D = plantão do dia (' + horario12(setor).dia + ')   N = plantão da noite (' + horario12(setor).noite + ')   F = folga   FÉ = férias   ·   Turma A: dias ' + diasDaTurma('A', mes) + '   Turma B: dias ' + diasDaTurma('B', mes)
+        : setor==='caixas' && revez()
+        ? 'T = trabalha no turno   F = folga   D = plantão do domingo (07:00 às 19:00)   N = noite (22:00 às 06:00; no domingo, plantão 19:00 às 06:00)   FÉ = férias'
+        : 'T = trabalha no turno   F = folga   N = cobre a noite (22:00 às 06:00)   C = cobre o caixa à noite (22:00 às 06:00)   FÉ = férias', 8, 22);
+      const fsPdf = setor==='caixas' ? frentistaSabado() : null;
+      if(fsPdf){
+        const f = state.employees.find(x=>x.id===fsPdf);
+        doc.text('Noite de sábado no caixa (22:00 às 06:00): ' + (f ? f.nome : '') + ' (frentista)', 289, 22, { align:'right' });
+      }
+      doc.text(geradoEm, 289, 11, { align:'right' });
+
+      const head = [['Funcionário', 'Horário\ne intervalo', ...dias.map(t=> DIA_LETRA[dow(t)] + '\n' + new Date(t).getUTCDate()), 'Dom.\nfolga']];
+      const body = [], meta = [];
+      let per = null;
+      const d12p = modelo12() ? distribuicao12() : null;
+      const autoPdf = intervalosAuto(d12p);
+      lista.forEach(e=>{
+        const grp = grupoTabela(e, d12p);
+        if(grp.chave !== per){
+          per = grp.chave;
+          body.push([{ content: grp.nome.toUpperCase() + ' · ' + lista.filter(x=>grupoTabela(x, d12p).chave===grp.chave).length, colSpan: dias.length + 3 }]);
+          meta.push({ tipo:'grupo' });
+        }
+        const rvp = setor==='caixas' ? revez() : null;
+        const extra = d12p ? ' · ' + (d12p[e.id].turno==='dia' ? 'dia' : 'noite') + ' · ' + nomeTurma(d12p[e.id].turma, mes)
+          : titularSabado(e) ? ' · folga qua e dom'
+          : e.folgaFixa ? ' · folga fixa sáb/dom'
+          : (cob && cob.id===e.id) ? ' · cobre noite sáb/dom'
+          : (rvp && rvp.ids.includes(e.id)) ? ' · turma ' + (rvp.t1.dia===e.id||rvp.t1.noite===e.id ? '1' : '2') + ' fim de semana'
+          : fasesRodizio()[e.id] !== undefined ? ' · rodízio fase ' + (fasesRodizio()[e.id]+1)
+          : ' · dom. ' + e.domingo;
+        const hr = partesTurno(horarioDe(e, d12p));
+        const itp = intervaloDe(e, d12p, autoPdf);
+        const intTxt = itp ? (itp.indenizado ? '\nInt. indenizado' : '\nInt. ' + itp.ini + '-' + itp.fim) : '';
+        body.push([e.nome + '\n' + extra.replace(/^ · /, ''), hr[0] + ' às ' + hr[1] + intTxt, ...dias.map(t=>{ const s = valor(g, e.id, t); return s==='V' ? 'FÉ' : s; }), String(conferir(e, g).domF)]);
+        meta.push({ tipo:'func', n: meta.filter(x=>x.tipo==='func').length });
+      });
+      periodosCobertura(lista).forEach(p=>{
+        const min = minimo(setor, p);
+        const nums = dias.map(t=> contarNoPeriodo(lista, g, p, t));
+        body.push(['Trabalhando · ' + NOME_PERIODO[p] + (min ? ' (mín. ' + min + ')' : ''), '', ...nums.map(String), '']);
+        meta.push({ tipo:'cob', min, nums });
+      });
+
+      doc.autoTable({
+        startY: 25,
+        head, body,
+        theme: 'grid',
+        margin: { left:8, right:8, top:10, bottom:8 },
+        styles: { fontSize:7, cellPadding:0.75, halign:'center', valign:'middle', lineColor:[110,118,140], lineWidth:0.2, textColor:[27,32,51] },
+        headStyles: { fillColor:[30,27,75], textColor:255, fontStyle:'bold', fontSize:7.2, lineColor:[255,255,255], lineWidth:0.2 },
+        columnStyles: { 0:{ halign:'left', cellWidth:44 }, 1:{ cellWidth:24 } },
+        didParseCell: d=>{
+          const col = d.column.index;
+          const ehDia = col >= 2 && col <= dias.length + 1;
+          if(d.section === 'head'){
+            if(ehDia && dow(dias[col-2])===0) d.cell.styles.fillColor = [67,56,202];
+            if(col === 1) d.cell.styles.fillColor = [180,83,9];
+            return;
+          }
+          const m = meta[d.row.index];
+          if(!m) return;
+          if(m.tipo === 'grupo'){
+            d.cell.styles.fillColor = [199,204,236];
+            d.cell.styles.fontStyle = 'bold';
+            d.cell.styles.fontSize = 7.4;
+            d.cell.styles.textColor = [30,27,75];
+            d.cell.styles.halign = 'left';
+            return;
+          }
+          if(m.tipo === 'cob'){
+            d.cell.styles.fillColor = [226,230,240];
+            d.cell.styles.fontStyle = 'bold';
+            if(ehDia && m.nums[col-2] < m.min){ d.cell.styles.fillColor = [251,227,230]; d.cell.styles.textColor = [180,35,53]; }
+            return;
+          }
+          const zebra = m.n % 2 === 1;
+          if(col === 0){ d.cell.styles.fontSize = 6.2; d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = zebra ? [236,239,246] : [255,255,255]; return; }
+          // horário em destaque: negrito, maior e com fundo amarelo
+          if(col === 1){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 7.2; d.cell.styles.fillColor = zebra ? [253,230,160] : [254,243,199]; d.cell.styles.textColor = [120,53,15]; return; }
+          if(ehDia){
+            const c = COR[d.cell.raw];
+            if(c){ d.cell.styles.fillColor = c.fill; d.cell.styles.textColor = c.text; d.cell.styles.fontStyle = 'bold'; }
+          }
+          if(col === dias.length + 2){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 7.6; d.cell.styles.fillColor = zebra ? [236,239,246] : [255,255,255]; if(d.cell.raw==='0') d.cell.styles.textColor = [180,35,53]; }
+        },
+        // linhas grossas: separando as semanas (antes de cada segunda), depois do horário e antes do total
+        didDrawCell: d=>{
+          const col = d.column.index;
+          const ehDia = col >= 2 && col <= dias.length + 1;
+          const grossa = (ehDia && dow(dias[col-2])===1) || col === 2 || col === dias.length + 2;
+          if(!grossa) return;
+          doc.setDrawColor(30,27,75);
+          doc.setLineWidth(0.7);
+          doc.line(d.cell.x, d.cell.y, d.cell.x, d.cell.y + d.cell.height);
+        },
+      });
+    });
+  });
+
+  const nome = meses.length === 1 ? `escala-${meses[0]}.pdf` : `escala-${meses[0]}_a_${meses[meses.length-1]}.pdf`;
+  doc.save(nome);
+}
+
+// ---------- eventos ----------
+document.addEventListener('click', ev=>{
+  const el = ev.target.closest('button, .modal-bg');
+  if(!el) return;
+  if(el.id==='modal-bg' && ev.target===el){ fecharModal(); return; }
+  if(el.dataset.tab){ ui.setor = el.dataset.tab; render(); return; }
+  if(el.dataset.edit){ abrirModal(Number(el.dataset.edit)); return; }
+  if(el.dataset.turma){
+    const id = Number(el.dataset.turma), e = state.employees.find(x=>x.id===id);
+    if(!e) return;
+    const atual = distribuicao12()[id];
+    congelar12(e.setor);
+    cfg12().manual[id] = { turno: atual.turno, turma: atual.turma==='A' ? 'B' : 'A' };
+    salvar(); render();
+    return;
+  }
+  if(el.dataset.cel){
+    const k = el.dataset.cel;
+    const g = ultimaGeracao;
+    const [id, iso] = k.split('|');
+    const t = fromIso(iso);
+    const atual = valor(g, id, t);
+    if(atual==='V') return;
+    // folga <-> trabalho; se o dia original era de noite (N), voltar pro trabalho volta pra noite
+    const novo = atual==='F' ? (['N','D','C'].includes(g.base[k]) ? g.base[k] : 'T') : 'F';
+    if(novo === g.base[k]) delete state.overrides[k]; else state.overrides[k] = novo;
+    salvar(); render();
+    const mesmo = document.querySelector(`[data-cel="${k}"]`);
+    if(mesmo) mesmo.focus();
+    return;
+  }
+  switch(el.id){
+    case 'btn-novo': abrirModal(null); break;
+    case 'btn-print': window.print(); break;
+    case 'btn-xlsx': exportarExcel(); break;
+    case 'btn-pdf': abrirModalPdf(); break;
+    case 'dz-auto':
+      if(!confirm('Desfazer as trocas de turno e turma feitas à mão no 12x36?')) break;
+      cfg12().manual = {}; salvar(); render(); break;
+    case 'btn-limpar-ajustes': {
+      const g = ultimaGeracao;
+      const chaves = Object.keys(state.overrides).filter(k=>{ const t = fromIso(k.split('|')[1]); return t>=g.first && t<=g.last; });
+      if(!chaves.length){ alert('Não há ajustes feitos à mão neste mês.'); break; }
+      if(!confirm(`Desfazer ${chaves.length} ajuste(s) feito(s) à mão em ${nomeMes(ui.mes)}?`)) break;
+      chaves.forEach(k=> delete state.overrides[k]);
+      salvar(); render(); break;
+    }
+    case 'm-fechar': case 'm-cancelar': fecharModal(); break;
+    case 'm-excluir': excluir(); break;
+  }
+});
+document.addEventListener('submit', ev=>{
+  if(ev.target.id==='m-form') salvarModal(ev);
+  if(ev.target.id==='pdf-form') gerarPdfDoModal(ev);
+});
+document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && ui.editId!==undefined && document.getElementById('modal-bg')) fecharModal(); });
+document.addEventListener('change', ev=>{
+  const el = ev.target;
+  if(el.id==='f-mes' && el.value){ ui.mes = el.value; render(); }
+  if(el.id && el.id.startsWith('rv-')){
+    const r = state.revezCaixas = state.revezCaixas || JSON.parse(JSON.stringify(REVEZ_PADRAO));
+    if(el.id==='rv-ativo') r.ativo = el.checked;
+    else if(el.id==='rv-inverter') r.inverter = el.checked;
+    else if(el.id==='rv-sabado') r.noiteSabado = el.value;
+    else if(el.id==='rv-frentista') r.frentistaSabado = el.value ? Number(el.value) : null;
+    else { const [, t, papel] = el.id.split('-'); r[t] = r[t] || {}; r[t][papel] = el.value ? Number(el.value) : null; }
+    salvar(); render();
+    return;
+  }
+  if(el.id==='f-modo'){ state.modoPista = el.value; salvar(); render(); return; }
+  if(el.id==='m-ent') { completarSaida12(); return; }
+  if(el.id==='m-int-ini' && el.value){
+    // fim = início + duração do intervalo para a jornada digitada
+    const dt = mod(minutos(document.getElementById('m-sai').value) - minutos(document.getElementById('m-ent').value), 1440) || 1440;
+    const dur = duracaoIntervalo(dt) || 60;
+    document.getElementById('m-int-fim').value = hhmm(minutos(el.value.slice(0,5)) + dur);
+    return;
+  }
+  if(el.id==='f-int'){ state.intervaloMin = Number(el.value) || 60; salvar(); render(); return; }
+  if(el.id==='dz-indenizado'){ cfg12().intervaloIndenizado = el.checked; salvar(); render(); return; }
+  if(el.id==='m-atalho' && el.value){
+    const [a, b] = partesTurno(el.value);
+    document.getElementById('m-ent').value = a;
+    document.getElementById('m-sai').value = b;
+    completarSaida12();
+    return;
+  }
+  if(el.id==='f-modelo'){ state.modelo = el.value; salvar(); render(); return; }
+  const mh = /^dz-(pista|caixas)-(dia|noite)$/.exec(el.id || '');
+  if(mh && el.value){
+    inicios12(mh[1])[mh[2]] = el.value.slice(0,5);
+    // ao mudar o dia, a noite acompanha (+12h) se estava encaixada; o contrário também
+    const h = inicios12(mh[1]);
+    if(mh[2]==='dia') h.noite = hhmm(minutos(h.dia) + 720);
+    salvar(); render(); return;
+  }
+  if(el.id==='dz-noite-pista' || el.id==='dz-noite-caixas'){
+    // o campo é o total na noite; metade trabalha dia sim, metade dia não (número ímpar arredonda pra cima)
+    cfg12().posNoite[el.id==='dz-noite-pista' ? 'pista' : 'caixas'] = Math.max(0, Math.ceil((Number(el.value)||0) / 2));
+    salvar(); render(); return;
+  }
+  if(el.id==='f-cobre'){
+    state.coberturaNoite = state.coberturaNoite || {};
+    state.coberturaNoite[ui.setor] = el.value ? Number(el.value) : null;
+    salvar(); render();
+  }
+  if(el.dataset && el.dataset.min){
+    const chave = modelo12() ? 'minimos12' : 'minimos';
+    state[chave] = state[chave] || {};
+    state[chave][ui.setor] = state[chave][ui.setor] || {};
+    state[chave][ui.setor][el.dataset.min] = Math.max(0, Number(el.value)||0);
+    salvar(); render();
+  }
+});
+document.getElementById('f-busca').addEventListener('input', ev=>{ ui.busca = ev.target.value; render(); });
+document.addEventListener('input', ev=>{ if(ev.target && ev.target.id==='m-ent') completarSaida12(); });
+
+// =====================================================================
+// NUVEM: o app de gestão conversa com o servidor (Google Apps Script).
+// Só o administrador entra aqui. Os colaboradores usam o app de visualização.
+// =====================================================================
+const NUVEM_KEY = 'escala-trevo-nuvem';
+const URL_SERVIDOR = 'https://script.google.com/macros/s/AKfycbzzPr5PBpuJ2PmRsoqnoCfJtZSJvuMS1iVuUHX4K41J-J1DXbS1fwpHrA2WGxg8aQp_/exec';
+let nuvem = { url:URL_SERVIDOR, token:'', versao:0, status:'off', msg:'' };
+let nuvemTimer = null, nuvemOcupada = false, nuvemPendente = false;
+try{ Object.assign(nuvem, JSON.parse(localStorage.getItem(NUVEM_KEY) || '{}')); }catch(e){}
+function guardarNuvem(){ try{ localStorage.setItem(NUVEM_KEY, JSON.stringify({ url:nuvem.url, token:nuvem.token, versao:nuvem.versao })); }catch(e){} }
+
+async function api(acao, dados){
+  if(!nuvem.url) throw new Error('Informe o endereço do servidor.');
+  const r = await fetch(nuvem.url, { method:'POST', body: JSON.stringify({ acao, token: nuvem.token, ...(dados||{}) }) });
+  if(!r.ok) throw new Error('Servidor respondeu ' + r.status + '. Confira o endereço da implantação.');
+  const j = await r.json();
+  if(j.sair){ nuvem.token = ''; guardarNuvem(); statusNuvem('off', 'Sessão encerrada. Entre de novo.'); }
+  return j;
+}
+
+function statusNuvem(st, msg){
+  nuvem.status = st; nuvem.msg = msg || '';
+  const dot = document.getElementById('nv-dot'), txt = document.getElementById('nv-txt');
+  if(!dot) return;
+  dot.className = 'nv-dot ' + (st==='ok' ? 'ok' : st==='salvando' ? 'salvando' : st==='erro' ? 'erro' : '');
+  txt.textContent = st==='ok' ? 'Nuvem: ' + (msg || 'salvo') : st==='salvando' ? 'Nuvem: salvando…' : st==='erro' ? 'Nuvem: erro' : 'Nuvem: desconectado';
+}
+
+// salva na nuvem 1,5s depois da última alteração
+function agendarNuvem(){
+  if(!nuvem.token) return;
+  clearTimeout(nuvemTimer);
+  statusNuvem('salvando');
+  nuvemTimer = setTimeout(enviarNuvem, 1500);
+}
+async function enviarNuvem(){
+  if(!nuvem.token) return;
+  if(nuvemOcupada){ nuvemPendente = true; return; }
+  nuvemOcupada = true;
+  try{
+    const r = await api('estadoSalvar', { estado: JSON.stringify(state), base: nuvem.versao });
+    if(r.ok){ nuvem.versao = r.versao; guardarNuvem(); statusNuvem('ok', 'salvo às ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})); }
+    else if(r.conflito){
+      alert('A escala foi alterada em outro aparelho. Vou carregar a versão mais nova da nuvem; refaça o último ajuste, se precisar.');
+      await baixarNuvem();
+    }
+    else if(!r.sair) statusNuvem('erro', r.erro);
+  }catch(e){ statusNuvem('erro', 'Sem conexão. Ficou salvo neste aparelho; tento de novo na próxima alteração.'); }
+  nuvemOcupada = false;
+  if(nuvemPendente){ nuvemPendente = false; enviarNuvem(); }
+}
+async function baixarNuvem(){
+  const r = await api('estadoCarregar');
+  if(!r.ok) throw new Error(r.erro || 'Não consegui carregar a escala da nuvem.');
+  if(r.estado){
+    const s = JSON.parse(r.estado);
+    if(s && Array.isArray(s.employees)){ state = s; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
+    nuvem.versao = r.versao; guardarNuvem();
+    render();
+    statusNuvem('ok', 'atualizado');
+    return 'carregou';
+  }
+  // nuvem vazia: sobe a escala deste aparelho
+  nuvem.versao = r.versao || 0;
+  const s = await api('estadoSalvar', { estado: JSON.stringify(state), base: nuvem.versao });
+  if(!s.ok) throw new Error(s.erro || 'Não consegui salvar na nuvem.');
+  nuvem.versao = s.versao; guardarNuvem(); statusNuvem('ok', 'salvo');
+  return 'enviou';
+}
+
+// ---------- janela da nuvem ----------
+function modalNuvem(conteudo, titulo){
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true" style="max-width:560px;">
+      <div class="modal-head"><h3>${titulo || 'Nuvem e acessos'}</h3><button type="button" id="m-fechar" aria-label="Fechar">×</button></div>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:12px;" id="nv-corpo">${conteudo}</div>
+    </div>
+  </div>`;
+}
+function abrirNuvem(msg, tipo){
+  if(!nuvem.token){
+    modalNuvem(`
+      <form id="nv-login" style="display:flex;flex-direction:column;gap:12px;padding:0;">
+        <div class="nv-msg">Entre como administrador para salvar a escala na nuvem, publicar o mês para a equipe e gerenciar as senhas dos colaboradores.</div>
+        <div class="field"><label for="nv-url">Endereço do servidor (URL da implantação do Apps Script)</label>
+          <input id="nv-url" required placeholder="https://script.google.com/macros/s/.../exec" value="${esc(nuvem.url)}"></div>
+        <div class="field"><label for="nv-senha">Senha de administrador</label><input id="nv-senha" type="password" required autocomplete="current-password"></div>
+        <div class="nv-msg ${tipo||''}" id="nv-aviso">${esc(msg||'')}</div>
+        <div class="modal-actions"><span></span><button type="submit" class="btn btn-amber">Entrar</button></div>
+      </form>`, 'Entrar como administrador');
+    return;
+  }
+  modalNuvem(`
+    <div class="nv-msg ${tipo||''}">${esc(msg || (nuvem.status==='erro' ? nuvem.msg : 'Conectado. Toda alteração na escala é salva sozinha na nuvem.'))}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+      <button class="btn btn-amber" id="nv-publicar">Publicar escala para a equipe</button>
+      <button class="btn btn-dark" id="nv-acessos">Senhas dos colaboradores</button>
+      <button class="btn btn-light" id="nv-recarregar">Recarregar da nuvem</button>
+      <button class="btn btn-light" id="nv-senha-admin">Trocar minha senha</button>
+    </div>
+    <div class="modal-actions"><button class="btn btn-danger" id="nv-sair">Sair da nuvem</button><button class="btn btn-light" id="m-cancelar">Fechar</button></div>`);
+}
+
+async function entrarNuvem(ev){
+  ev.preventDefault();
+  const aviso = document.getElementById('nv-aviso');
+  nuvem.url = document.getElementById('nv-url').value.trim();
+  aviso.className = 'nv-msg'; aviso.textContent = 'Conectando…';
+  try{
+    const r = await api('loginAdmin', { senha: document.getElementById('nv-senha').value });
+    if(!r.ok){ aviso.className = 'nv-msg erro'; aviso.textContent = r.erro; return; }
+    nuvem.token = r.token; guardarNuvem();
+    const como = await baixarNuvem();
+    abrirNuvem(como==='carregou' ? 'Conectado. Carreguei a escala salva na nuvem.' : 'Conectado. A escala deste aparelho foi salva na nuvem.', 'ok');
+  }catch(e){ aviso.className = 'nv-msg erro'; aviso.textContent = e.message || 'Não consegui conectar.'; }
+}
+
+// ---------- publicar ----------
+// Descreve o que a pessoa faz em cada dia, com o horário daquele dia
+function descreverDia(e, s, t, d12, it){
+  if(s==='F') return { s, txt:'Folga', h:'', i:'' };
+  if(s==='V') return { s, txt:'Férias', h:'', i:'' };
+  const int = it && !it.indenizado ? it.ini + ' às ' + it.fim : '';
+  if(modelo12()){
+    if(s==='D') return { s, txt:'Plantão do dia', h:horarioDe(e, d12), i:int };
+    if(s==='N') return { s, txt:'Plantão da noite', h:horarioDe(e, d12), i:int };
+  }
+  if(s==='T') return { s, txt:'Trabalha', h:e.turno, i:int };
+  if(s==='N') return (e.setor==='caixas' && revez() && dow(t)===0)
+    ? { s, txt:'Plantão da noite', h:'19:00 às 06:00', i:'' }
+    : { s, txt:'Cobre a noite', h:'22:00 às 06:00', i:'' };
+  if(s==='D') return { s, txt:'Plantão do domingo', h:'07:00 às 19:00', i:'' };
+  if(s==='C') return { s, txt:'Cobre o caixa à noite', h:'22:00 às 06:00', i:'' };
+  return { s, txt:'Trabalha', h:e.turno, i:int };
+}
+function infoEscala(e, d12, mes){
+  if(d12) return (d12[e.id].turno==='dia' ? 'Plantão do dia' : 'Plantão da noite') + ' · ' + nomeTurma(d12[e.id].turma, mes);
+  const f = fasesRodizio()[e.id];
+  if(f !== undefined) return 'Rodízio de folgas · fase ' + (f+1);
+  if(e.folgaFixa) return 'Folga fixa sábado e domingo';
+  return 'Domingo de folga · grupo ' + (e.domingo || '');
+}
+function montarPublicacao(mes){
+  const g = gerar(mes), d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  const lista = [];
+  state.employees.forEach(e=>{
+    const it = intervaloDe(e, d12, autoI);
+    const dias = [];
+    for(let t = g.first; t <= g.last; t += DAY){
+      const d = descreverDia(e, valor(g, e.id, t), t, d12, it);
+      dias.push({ d: new Date(t).getUTCDate(), w: dow(t), ...d });
+    }
+    lista.push({
+      id: e.id, nome: e.nome, setor: e.setor, mes, modelo: modelo12() ? '12x36' : '5x2',
+      horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? 'Indenizado' : it.ini + ' às ' + it.fim) : '',
+      info: infoEscala(e, d12, mes), domingosFolga: conferir(e, g).domF, dias,
+      geradoEm: new Date().toISOString()
+    });
+  });
+  return lista;
+}
+async function abrirPublicar(){
+  modalNuvem(`<div class="nv-msg">Carregando meses publicados…</div>`, 'Publicar escala para a equipe');
+  let meses = [];
+  try{ const r = await api('mesesPublicados'); if(r.ok) meses = r.meses; }catch(e){}
+  const pub = meses.length ? meses.map(m=>`<div class="nv-item"><div><b>${esc(nomeMes(m.mes))}</b><small>${esc(m.modelo)} · ${esc(m.colaboradores)} colaboradores</small></div>
+      <div class="nv-acoes"><button class="btn btn-danger" data-despublicar="${esc(m.mes)}">Tirar do ar</button></div></div>`).join('')
+    : `<div class="nv-msg">Nenhum mês publicado ainda.</div>`;
+  modalNuvem(`
+    <form id="nv-pub-form" style="display:flex;flex-direction:column;gap:12px;padding:0;">
+      <div class="nv-msg">A equipe só vê o que você publicar. Publicar de novo um mês substitui a versão anterior dele. É publicada a escala do modelo aberto agora: <b>${modelo12() ? '12x36' : '5x2'}</b>.</div>
+      <div class="row2">
+        <div class="field"><label for="nv-de">Do mês</label><input type="month" id="nv-de" required value="${ui.mes}"></div>
+        <div class="field"><label for="nv-ate">Até o mês</label><input type="month" id="nv-ate" required value="${ui.mes}"></div>
+      </div>
+      <div class="nv-msg" id="nv-pub-aviso"></div>
+      <div class="modal-actions"><button type="button" class="btn btn-light" id="nv-voltar">Voltar</button><button type="submit" class="btn btn-amber">Publicar</button></div>
+    </form>
+    <h3 style="margin:6px 0 0;font-size:13px;">Já publicados</h3>
+    <div class="nv-lista">${pub}</div>`, 'Publicar escala para a equipe');
+}
+async function publicarMeses(ev){
+  ev.preventDefault();
+  const de = document.getElementById('nv-de').value, ate = document.getElementById('nv-ate').value;
+  const aviso = document.getElementById('nv-pub-aviso');
+  if(!de || !ate || ate < de){ aviso.className = 'nv-msg erro'; aviso.textContent = 'Confira os meses: o final está antes do inicial.'; return; }
+  const meses = [];
+  for(let m = de; m <= ate && meses.length <= 12; m = proximoMes(m, 1)) meses.push(m);
+  if(meses.length > 12){ aviso.className = 'nv-msg erro'; aviso.textContent = 'Publique no máximo 12 meses por vez.'; return; }
+  // avisa se tem regra descumprida antes de publicar
+  const problemas = [];
+  meses.forEach(m=>{ const g = gerar(m); state.employees.forEach(e=>{ if(conferir(e, g).avisos.length) problemas.push(e.nome.split(' ')[0] + ' (' + nomeMes(m) + ')'); }); });
+  if(problemas.length && !confirm('Há regras descumpridas para: ' + [...new Set(problemas)].slice(0,8).join(', ') + (problemas.length>8?'…':'') + '.\n\nPublicar mesmo assim?')) return;
+  try{
+    for(const m of meses){
+      aviso.className = 'nv-msg'; aviso.textContent = 'Publicando ' + nomeMes(m) + '…';
+      const r = await api('publicar', { mes:m, modelo: modelo12() ? '12x36' : '5x2', colaboradores: montarPublicacao(m) });
+      if(!r.ok) throw new Error(r.erro || 'Falha ao publicar ' + nomeMes(m));
+    }
+    await abrirPublicar();
+    const a2 = document.getElementById('nv-pub-aviso');
+    a2.className = 'nv-msg ok'; a2.textContent = 'Publicado: ' + meses.map(nomeMes).join(', ') + '. A equipe já pode ver.';
+  }catch(e){ aviso.className = 'nv-msg erro'; aviso.textContent = e.message; }
+}
+
+// ---------- senhas dos colaboradores ----------
+async function abrirAcessos(msgHtml){
+  modalNuvem(`<div class="nv-msg">Carregando…</div>`, 'Senhas dos colaboradores');
+  let srv = [];
+  try{ const r = await api('acessos'); if(!r.ok) throw new Error(r.erro); srv = r.colaboradores; }
+  catch(e){ modalNuvem(`<div class="nv-msg erro">${esc(e.message)}</div><div class="modal-actions"><button class="btn btn-light" id="nv-voltar">Voltar</button></div>`, 'Senhas dos colaboradores'); return; }
+  const porId = {}; srv.forEach(c=> porId[Number(c.id)] = c);
+  const linhas = ordenar(state.employees.slice()).map(e=>{
+    const c = porId[e.id];
+    const chip = !c || !c.temPin ? '<span class="chip chip-sem">sem PIN</span>' : c.ativo ? '<span class="chip chip-ok">ativo</span>' : '<span class="chip chip-bloq">bloqueado</span>';
+    return `<div class="nv-item"><div><b>${esc(e.nome)}</b>${chip}<small>${e.setor==='pista'?'Pista':'Caixas'}${c && c.ultimoAcesso ? ' · último acesso ' + esc(c.ultimoAcesso) : ''}</small></div>
+      <div class="nv-acoes">
+        <button class="btn btn-dark" data-pin="${e.id}">${c && c.temPin ? 'Novo PIN' : 'Gerar PIN'}</button>
+        ${c && c.temPin ? `<button class="btn ${c.ativo?'btn-danger':'btn-light'}" data-ativar="${e.id}" data-valor="${c.ativo?0:1}">${c.ativo?'Bloquear':'Liberar'}</button>` : ''}
+      </div></div>`;
+  });
+  // quem está no servidor mas saiu da escala
+  srv.filter(c=> !state.employees.some(e=>e.id===Number(c.id)) && c.ativo && c.temPin).forEach(c=>{
+    linhas.push(`<div class="nv-item"><div><b>${esc(c.nome)}</b><span class="chip chip-bloq">fora da escala</span><small>Ainda consegue entrar. Bloqueie se a pessoa saiu do posto.</small></div>
+      <div class="nv-acoes"><button class="btn btn-danger" data-ativar="${Number(c.id)}" data-valor="0">Bloquear</button></div></div>`);
+  });
+  modalNuvem(`
+    ${msgHtml || '<div class="nv-msg">Gere um PIN de 6 números para cada colaborador e entregue pessoalmente. Trocar o PIN ou bloquear desconecta a pessoa na hora.</div>'}
+    <div class="nv-lista">${linhas.join('')}</div>
+    <div class="modal-actions"><button class="btn btn-light" id="nv-voltar">Voltar</button><button class="btn btn-light" id="m-cancelar">Fechar</button></div>`, 'Senhas dos colaboradores');
+}
+function novoPin(){
+  const a = new Uint32Array(1); crypto.getRandomValues(a);
+  return String(100000 + (a[0] % 900000));
+}
+async function gerarPinPara(id){
+  const e = state.employees.find(x=>x.id===id);
+  if(!e) return;
+  if(!confirm(`Gerar um novo PIN para ${e.nome}? Se ele já tinha um, o antigo deixa de funcionar.`)) return;
+  const pin = novoPin();
+  const r = await api('definirPin', { id:e.id, nome:e.nome, setor:e.setor, pin });
+  if(!r.ok){ abrirAcessos(`<div class="nv-msg erro">${esc(r.erro)}</div>`); return; }
+  modalNuvem(`
+    <div class="nv-msg">PIN de <b>${esc(e.nome)}</b>. Anote e entregue pessoalmente: ele não aparece de novo. Se perder, gere outro.</div>
+    <div class="pin-grande" id="nv-pin">${pin}</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"><button class="btn btn-light" id="nv-copiar" data-copiar="Escala Posto Trevo · ${esc(e.nome.split(' ')[0])}, seu PIN é ${pin}">Copiar mensagem com o PIN</button></div>
+    <div class="modal-actions"><span></span><button class="btn btn-amber" id="nv-acessos">Voltar à lista</button></div>`, 'PIN gerado');
+}
+async function ativarAcesso(id, ativo){
+  const r = await api('ativar', { id, ativo });
+  abrirAcessos(r.ok ? `<div class="nv-msg ok">${ativo ? 'Acesso liberado.' : 'Acesso bloqueado. A pessoa foi desconectada.'}</div>` : `<div class="nv-msg erro">${esc(r.erro)}</div>`);
+}
+function abrirTrocaSenha(){
+  modalNuvem(`
+    <form id="nv-troca" style="display:flex;flex-direction:column;gap:12px;padding:0;">
+      <div class="field"><label for="nv-atual">Senha atual</label><input type="password" id="nv-atual" required autocomplete="current-password"></div>
+      <div class="field"><label for="nv-nova">Nova senha (mínimo 8 caracteres)</label><input type="password" id="nv-nova" required minlength="8" autocomplete="new-password"></div>
+      <div class="nv-msg" id="nv-troca-aviso"></div>
+      <div class="modal-actions"><button type="button" class="btn btn-light" id="nv-voltar">Voltar</button><button type="submit" class="btn btn-amber">Trocar senha</button></div>
+    </form>`, 'Trocar minha senha');
+}
+async function trocarSenha(ev){
+  ev.preventDefault();
+  const aviso = document.getElementById('nv-troca-aviso');
+  const r = await api('trocarSenhaAdmin', { atual: document.getElementById('nv-atual').value, nova: document.getElementById('nv-nova').value });
+  if(!r.ok){ aviso.className = 'nv-msg erro'; aviso.textContent = r.erro; return; }
+  nuvem.token = ''; guardarNuvem(); statusNuvem('off');
+  abrirNuvem('Senha trocada. Entre de novo com a senha nova.', 'ok');
+}
+
+document.addEventListener('submit', ev=>{
+  const id = ev.target.id;
+  if(id==='nv-login') entrarNuvem(ev);
+  if(id==='nv-pub-form') publicarMeses(ev);
+  if(id==='nv-troca') trocarSenha(ev);
+});
+document.addEventListener('click', async ev=>{
+  const el = ev.target.closest('button');
+  if(!el) return;
+  try{
+    if(el.id==='btn-nuvem') return abrirNuvem();
+    if(el.id==='nv-voltar') return abrirNuvem();
+    if(el.id==='nv-publicar') return abrirPublicar();
+    if(el.id==='nv-acessos') return abrirAcessos();
+    if(el.id==='nv-senha-admin') return abrirTrocaSenha();
+    if(el.id==='nv-recarregar'){ await baixarNuvem(); return abrirNuvem('Escala recarregada da nuvem.', 'ok'); }
+    if(el.id==='nv-sair'){ nuvem.token = ''; guardarNuvem(); statusNuvem('off'); return abrirNuvem('Você saiu. A escala continua salva neste aparelho e na nuvem.'); }
+    if(el.dataset.pin) return gerarPinPara(Number(el.dataset.pin));
+    if(el.dataset.ativar) return ativarAcesso(Number(el.dataset.ativar), el.dataset.valor==='1');
+    if(el.dataset.despublicar){
+      if(!confirm('Tirar ' + nomeMes(el.dataset.despublicar) + ' do ar? A equipe deixa de ver esse mês.')) return;
+      const r = await api('despublicar', { mes: el.dataset.despublicar });
+      return r.ok ? abrirPublicar() : alert(r.erro);
+    }
+    if(el.id==='nv-copiar'){
+      const txt = el.dataset.copiar;
+      try{ await navigator.clipboard.writeText(txt); el.textContent = 'Copiado!'; }
+      catch(e){ const r = document.createRange(); r.selectNodeContents(document.getElementById('nv-pin')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); el.textContent = 'Selecionado: copie com Ctrl+C'; }
+    }
+  }catch(e){ alert(e.message || 'Não consegui falar com o servidor.'); }
+});
+
+// =====================================================================
+// RELATÓRIOS ordenados por horário
+// =====================================================================
+const ORDENS = { entrada:'Horário de entrada', saida:'Horário de saída', intervalo:'Horário do intervalo', nome:'Nome' };
+let relUltimo = null; // último relatório montado (para o PDF)
+
+function hojeIsoDia(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// minutos para ordenar; quem não tem horário vai para o fim
+function chaveOrdem(linha, ordem){
+  if(ordem==='nome') return linha.nome;
+  const txt = ordem==='saida' ? (linha.horario ? partesTurno(linha.horario)[1] : '') : ordem==='intervalo' ? (linha.intervalo || '').slice(0,5) : (linha.horario ? partesTurno(linha.horario)[0] : '');
+  // o dia do posto começa às 04:00: madrugada (00:00 a 03:59) fica no fim da lista
+  return /^\d{2}:\d{2}/.test(txt) ? mod(minutos(txt) - 240, 1440) : 99999;
+}
+function ordenarLinhas(linhas, ordem){
+  return linhas.sort((a,b)=>{
+    const ka = chaveOrdem(a, ordem), kb = chaveOrdem(b, ordem);
+    if(ka < kb) return -1; if(ka > kb) return 1;
+    return a.nome.localeCompare(b.nome);
+  });
+}
+function filtrarSetor(lista, setor){ return setor==='todos' ? lista : lista.filter(e=>e.setor===setor); }
+
+// Escala por dia: para cada data, quem trabalha (ordenado) e quem está de folga ou de férias
+function montarRelDias(de, ate, setor, ordem, separar){
+  const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  const gCache = {};
+  const dias = [];
+  for(let t = fromIso(de); t <= fromIso(ate); t += DAY){
+    const mes = toIso(t).slice(0,7);
+    const g = gCache[mes] || (gCache[mes] = gerar(mes));
+    const trab = [], fora = [];
+    filtrarSetor(state.employees, setor).forEach(e=>{
+      const it = intervaloDe(e, d12, autoI);
+      const d = descreverDia(e, valor(g, e.id, t), t, d12, it);
+      const linha = { nome:e.nome, setor:e.setor, situacao:d.txt, horario:d.h, intervalo:d.i || (it && it.indenizado && d.h ? 'Indenizado' : ''), codigo:d.s };
+      (d.s==='F' || d.s==='V' ? fora : trab).push(linha);
+    });
+    const grupos = separar && setor==='todos'
+      ? ['pista','caixas'].map(st=>({ titulo: SETORES[st], linhas: ordenarLinhas(trab.filter(l=>l.setor===st), ordem) })).filter(x=>x.linhas.length)
+      : [{ titulo:'', linhas: ordenarLinhas(trab, ordem) }];
+    dias.push({ t, grupos, fora: fora.sort((a,b)=>a.nome.localeCompare(b.nome)), total: trab.length });
+  }
+  return { tipo:'dias', de, ate, setor, ordem, dias };
+}
+// Quadro de horários: horário e intervalo fixos de cada um
+function montarRelQuadro(setor, ordem, separar){
+  const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  const linhas = filtrarSetor(state.employees, setor).map(e=>{
+    const it = intervaloDe(e, d12, autoI);
+    return { nome:e.nome, setor:e.setor, horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? 'Indenizado' : it.ini + ' às ' + it.fim) : '', situacao: infoEscala(e, d12, ui.mes) };
+  });
+  const grupos = separar && setor==='todos'
+    ? ['pista','caixas'].map(st=>({ titulo: SETORES[st], linhas: ordenarLinhas(linhas.filter(l=>l.setor===st), ordem) })).filter(x=>x.linhas.length)
+    : [{ titulo:'', linhas: ordenarLinhas(linhas, ordem) }];
+  return { tipo:'quadro', setor, ordem, grupos };
+}
+
+function tituloData(t){ const d = new Date(t); return ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][d.getUTCDay()] + ', ' + ddmm(t) + '/' + d.getUTCFullYear(); }
+
+function htmlTabelaRel(linhas, comSetor){
+  if(!linhas.length) return '<div class="nv-msg">Ninguém trabalhando.</div>';
+  return `<div style="overflow-x:auto;"><table class="rel-tab"><thead><tr><th>#</th><th>Funcionário</th>${comSetor?'<th>Setor</th>':''}<th>Horário</th><th>Intervalo</th><th>Situação</th></tr></thead><tbody>${
+    linhas.map((l,i)=>`<tr><td>${i+1}</td><td><b>${esc(l.nome)}</b></td>${comSetor?`<td>${l.setor==='pista'?'Pista':'Caixa'}</td>`:''}<td class="rel-h">${esc(l.horario||'—')}</td><td>${esc(l.intervalo||'—')}</td><td>${esc(l.situacao||'')}</td></tr>`).join('')
+  }</tbody></table></div>`;
+}
+function htmlRelatorio(r){
+  const comSetor = r.setor==='todos';
+  if(r.tipo==='quadro'){
+    return r.grupos.map(gp=>`${gp.titulo?`<h4 class="rel-sub">${esc(gp.titulo)}</h4>`:''}${htmlTabelaRel(gp.linhas, comSetor && !gp.titulo)}`).join('');
+  }
+  return r.dias.map(d=>`
+    <div class="rel-dia">
+      <h4>${tituloData(d.t)} <span>${d.total} trabalhando</span></h4>
+      ${d.grupos.map(gp=>`${gp.titulo?`<h5 class="rel-sub">${esc(gp.titulo)}</h5>`:''}${htmlTabelaRel(gp.linhas, comSetor && !gp.titulo)}`).join('')}
+      ${d.fora.length ? `<div class="nv-msg" style="margin-top:6px;"><b>De folga:</b> ${d.fora.map(f=>esc(f.nome.split(' ').slice(0,2).join(' ')) + (f.codigo==='V'?' (férias)':'')).join(', ')}</div>` : ''}
+    </div>`).join('');
+}
+
+function abrirRelatorios(){
+  const hoje = hojeIsoDia();
+  document.getElementById('modal-root').innerHTML = `
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true" style="max-width:860px;">
+      <div class="modal-head"><h3>Relatórios por horário</h3><button type="button" id="m-fechar" aria-label="Fechar">×</button></div>
+      <form id="rel-form" style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+        <div class="row2">
+          <div class="field"><label for="rel-tipo">Relatório</label>
+            <select id="rel-tipo">
+              <option value="dias">Escala por dia (quem trabalha em cada dia)</option>
+              <option value="quadro">Quadro de horários (horário fixo de cada um)</option>
+            </select></div>
+          <div class="field"><label for="rel-ordem">Ordenar por</label>
+            <select id="rel-ordem">${Object.entries(ORDENS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+        </div>
+        <div class="row2" id="rel-datas">
+          <div class="field"><label for="rel-de">Do dia</label><input type="date" id="rel-de" value="${hoje}" required></div>
+          <div class="field"><label for="rel-ate">Até o dia</label><input type="date" id="rel-ate" value="${hoje}" required></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="rel-setor">Setor</label>
+            <select id="rel-setor"><option value="todos">Pista e caixas</option><option value="pista">Só pista</option><option value="caixas">Só caixas</option></select></div>
+          <label class="check" style="align-self:end;padding-bottom:10px;"><input type="checkbox" id="rel-separar" checked> Separar pista e caixas</label>
+        </div>
+        <div class="nv-msg">Escala usada: <b>${modelo12() ? '12x36' : '5x2'}</b> (a que está aberta agora).</div>
+        <div class="modal-actions">
+          <span></span>
+          <div><button type="submit" class="btn btn-dark">Ver na tela</button> <button type="button" class="btn btn-amber" id="rel-pdf">Gerar PDF</button></div>
+        </div>
+        <div id="rel-saida" class="rel-saida"></div>
+      </form>
+    </div>
+  </div>`;
+  verRelatorio();
+}
+function lerRelForm(){
+  const tipo = document.getElementById('rel-tipo').value;
+  document.getElementById('rel-datas').hidden = tipo !== 'dias';
+  const setor = document.getElementById('rel-setor').value, ordem = document.getElementById('rel-ordem').value;
+  const separar = document.getElementById('rel-separar').checked;
+  if(tipo==='quadro') return montarRelQuadro(setor, ordem, separar);
+  let de = document.getElementById('rel-de').value, ate = document.getElementById('rel-ate').value;
+  if(!de) de = hojeIsoDia(); if(!ate || ate < de) ate = de;
+  if((fromIso(ate) - fromIso(de)) / DAY > 61){ ate = toIso(fromIso(de) + 61*DAY); document.getElementById('rel-ate').value = ate; }
+  return montarRelDias(de, ate, setor, ordem, separar);
+}
+function verRelatorio(){
+  relUltimo = lerRelForm();
+  document.getElementById('rel-saida').innerHTML = htmlRelatorio(relUltimo);
+}
+
+function pdfRelatorio(){
+  const r = relUltimo || lerRelForm();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const titulo = r.tipo==='quadro' ? 'QUADRO DE HORÁRIOS' : 'ESCALA POR DIA';
+  const sub = (r.setor==='todos' ? 'Pista e caixas' : SETORES[r.setor]) + ' · escala ' + (modelo12() ? '12x36' : '5x2') + ' · ordenado por ' + ORDENS[r.ordem].toLowerCase()
+    + (r.tipo==='dias' ? ' · ' + ddmm(fromIso(r.de)) + (r.de!==r.ate ? ' a ' + ddmm(fromIso(r.ate)) : '') : '');
+  const cabecalho = () => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,27,75);
+    doc.text('POSTO TREVO · ' + titulo, 10, 12);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(94,102,128);
+    doc.text(sub, 10, 17.5);
+    doc.text('Gerado em ' + new Date().toLocaleDateString('pt-BR'), 200, 12, { align:'right' });
+  };
+  cabecalho();
+  let y = 23;
+  const tabela = (linhas, rotulo, comSetor) => {
+    if(rotulo){
+      if(y > 270){ doc.addPage(); cabecalho(); y = 23; }
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(30,27,75); doc.text(rotulo, 10, y + 4); y += 6;
+    }
+    if(!linhas.length){ doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(94,102,128); doc.text('Ninguém trabalhando.', 10, y + 4); y += 8; return; }
+    const head = [['#','Funcionário', ...(comSetor?['Setor']:[]), 'Horário', 'Intervalo', 'Situação']];
+    const body = linhas.map((l,i)=>[String(i+1), l.nome, ...(comSetor?[l.setor==='pista'?'Pista':'Caixa']:[]), l.horario||'—', l.intervalo||'—', l.situacao||'']);
+    const colH = comSetor ? 3 : 2;
+    doc.autoTable({
+      startY: y, head, body, theme:'grid',
+      margin:{ left:10, right:10, top:22 },
+      styles:{ fontSize:8.6, cellPadding:1.4, lineColor:[150,156,175], lineWidth:0.2, textColor:[27,32,51], valign:'middle' },
+      headStyles:{ fillColor:[30,27,75], textColor:255, fontStyle:'bold' },
+      alternateRowStyles:{ fillColor:[240,242,248] },
+      columnStyles:{ 0:{ cellWidth:8, halign:'center' }, 1:{ fontStyle:'bold' }, [colH]:{ cellWidth:30, halign:'center', fontStyle:'bold', fillColor:[254,243,199], textColor:[120,53,15] }, [colH+1]:{ cellWidth:28, halign:'center' } },
+      didDrawPage: d => { if(d.pageNumber > 1) cabecalho(); }, // página nova criada pela tabela
+    });
+    y = doc.lastAutoTable.finalY + 4;
+  };
+  if(r.tipo==='quadro'){
+    r.grupos.forEach(gp=> tabela(gp.linhas, gp.titulo, r.setor==='todos' && !gp.titulo));
+  } else {
+    r.dias.forEach((d, i)=>{
+      if(i > 0 && y > 200){ doc.addPage(); cabecalho(); y = 23; }
+      doc.setDrawColor(30,27,75); doc.setLineWidth(0.6); doc.line(10, y, 200, y); y += 2;
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(30,27,75);
+      doc.text(tituloData(d.t), 10, y + 5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(94,102,128);
+      doc.text(d.total + ' trabalhando', 200, y + 5, { align:'right' }); y += 8;
+      d.grupos.forEach(gp=> tabela(gp.linhas, gp.titulo, r.setor==='todos' && !gp.titulo));
+      if(d.fora.length){
+        doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(94,102,128);
+        const txt = doc.splitTextToSize('De folga: ' + d.fora.map(f=>f.nome.split(' ').slice(0,2).join(' ') + (f.codigo==='V'?' (férias)':'')).join(', '), 190);
+        if(y + txt.length*4 > 285){ doc.addPage(); cabecalho(); y = 23; }
+        doc.text(txt, 10, y + 3); y += txt.length * 4 + 4;
+      }
+      y += 2;
+    });
+  }
+  const nome = r.tipo==='quadro' ? 'quadro-de-horarios.pdf' : ('escala-por-dia-' + r.de + (r.de!==r.ate ? '_a_' + r.ate : '') + '.pdf');
+  doc.save(nome);
+}
+
+document.addEventListener('submit', ev=>{ if(ev.target.id==='rel-form'){ ev.preventDefault(); verRelatorio(); } });
+document.addEventListener('change', ev=>{ if(ev.target.id && ev.target.id.startsWith('rel-')) verRelatorio(); });
+document.addEventListener('click', ev=>{
+  const b = ev.target.closest('button'); if(!b) return;
+  if(b.id==='btn-rel') abrirRelatorios();
+  if(b.id==='rel-pdf'){ verRelatorio(); pdfRelatorio(); }
+});
+
+carregar();
+render();
+// ao abrir: se já estava conectado, pega a versão mais nova da nuvem
+if(nuvem.token){ statusNuvem('salvando'); baixarNuvem().catch(e=> statusNuvem('erro', e.message)); }
+</script>
+</body>
+</html>
