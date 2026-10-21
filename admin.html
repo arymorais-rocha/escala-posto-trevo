@@ -656,25 +656,32 @@ function carregar(){
   try{
     const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if(s && Array.isArray(s.employees)){
-      state.employees = s.employees;
-      state.overrides = s.overrides || {};
-      if(s.minimos) state.minimos = s.minimos;
-      state.coberturaNoite = s.coberturaNoite || coberturaPadrao();
-      state.revezCaixas = s.revezCaixas || JSON.parse(JSON.stringify(REVEZ_PADRAO));
-      // versões anteriores não tinham o frentista do sábado: passa a usar esse modo
-      if(state.revezCaixas.frentistaSabado === undefined){
-        state.revezCaixas.noiteSabado = 'frentista';
-        state.revezCaixas.frentistaSabado = FRENTISTA_SABADO_PADRAO;
-      }
+      // guarda TUDO o que estava salvo (modelo, 12x36, intervalos, mínimos...), não só os funcionários
+      Object.assign(state, s);
+      aplicarPadroes();
       salvar();
       return;
     }
   }catch(e){}
   state.employees = PADRAO.map(e => ({ folgaFixa:false, feriasIni:'', feriasFim:'', domingo:null, ...e }));
   distribuirGrupos();
-  state.coberturaNoite = coberturaPadrao();
-  state.revezCaixas = JSON.parse(JSON.stringify(REVEZ_PADRAO));
+  aplicarPadroes();
   salvar();
+}
+// completa o que faltar e aplica mudanças de versão
+function aplicarPadroes(){
+  state.overrides = state.overrides || {};
+  state.minimos = state.minimos || { pista:{manha:4,tarde:4,noite:1}, caixas:{manha:1,tarde:1,noite:1} };
+  state.coberturaNoite = state.coberturaNoite || coberturaPadrao();
+  state.revezCaixas = state.revezCaixas || JSON.parse(JSON.stringify(REVEZ_PADRAO));
+  // versões anteriores não tinham o frentista do sábado: passa a usar esse modo
+  if(state.revezCaixas.frentistaSabado === undefined){
+    state.revezCaixas.noiteSabado = 'frentista';
+    state.revezCaixas.frentistaSabado = FRENTISTA_SABADO_PADRAO;
+  }
+  // o posto passou a usar a 12x36: abre nela e esconde a 5x2 (dá pra mostrar de novo no painel do 12x36)
+  if(state.ocultar5x2 === undefined){ state.ocultar5x2 = true; state.modelo = '12x36'; }
+  if(state.ocultar5x2) state.modelo = '12x36';
 }
 function coberturaPadrao(){
   const out = { pista:null, caixas:null };
@@ -980,6 +987,9 @@ function render12Painel(){
     <div class="fds"><b>Em ${nomeMes(ui.mes)}:</b> turma A trabalha nos dias ${diasDaTurma('A', ui.mes)} e turma B nos dias ${diasDaTurma('B', ui.mes)}. Para trocar alguém de turma, clique na etiqueta da turma ao lado do nome. ${(()=>{ const [y,m] = ui.mes.split('-').map(Number); return new Date(Date.UTC(y,m,0)).getUTCDate()===31 ? 'Este mês tem 31 dias: o dia 31 e o dia 1 do mês seguinte são seguidos, então no próximo mês as turmas invertem par e ímpar.' : ''; })()}</div>
     <div class="fds"><b>Jornada:</b> ${intervalo12Min() ? `${String(span12()/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
     <div class="fds">Cada um trabalha 12 horas e descansa no dia seguinte (dia sim, dia não). A turma A trabalha num dia e a B no outro, então cada posto precisa de 2 pessoas no dia e 2 na noite. Vão pra noite os de turno mais tarde; para trocar alguém de turno ou de turma, clique no nome. Cada um folga um domingo a cada 2 semanas.</div>
+    <div class="fds">${state.ocultar5x2
+      ? 'A escala 5x2 está oculta. <button type="button" class="btn btn-light" id="dz-5x2" style="padding:4px 10px;font-size:12px;">Mostrar escala 5x2</button>'
+      : 'A escala 5x2 está visível no seletor "Modelo de escala". <button type="button" class="btn btn-light" id="dz-5x2" style="padding:4px 10px;font-size:12px;">Ocultar escala 5x2</button>'}</div>
     <label class="check" style="font-size:12.5px;"><input type="checkbox" id="dz-indenizado" ${cfg.intervaloIndenizado?'checked':''}> Intervalo indenizado no 12x36 (pago, sem parar o trabalho; a lei permite no 12x36)</label>
     <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>`;
 }
@@ -1012,6 +1022,7 @@ function render(){
   selModo.hidden = document.getElementById('lbl-modo').hidden = ui.setor !== 'pista' || modelo12();
   selCobre.hidden = document.querySelector('label[for="f-cobre"]').hidden = modelo12();
   document.getElementById('f-modelo').value = modelo12() ? '12x36' : '5x2';
+  document.getElementById('f-modelo').hidden = document.querySelector('label[for="f-modelo"]').hidden = !!state.ocultar5x2;
   document.getElementById('f-int').value = String(Number(state.intervaloMin) || 60);
   render12Painel();
   const fasesTela = fasesRodizio();
@@ -1537,6 +1548,10 @@ document.addEventListener('click', ev=>{
     case 'btn-print': window.print(); break;
     case 'btn-xlsx': exportarExcel(); break;
     case 'btn-pdf': abrirModalPdf(); break;
+    case 'dz-5x2':
+      state.ocultar5x2 = !state.ocultar5x2;
+      if(state.ocultar5x2) state.modelo = '12x36';
+      salvar(); render(); break;
     case 'dz-auto':
       if(!confirm('Desfazer as trocas de turno e turma feitas à mão no 12x36?')) break;
       cfg12().manual = {}; salvar(); render(); break;
@@ -1674,7 +1689,7 @@ async function baixarNuvem(){
   if(!r.ok) throw new Error(r.erro || 'Não consegui carregar a escala da nuvem.');
   if(r.estado){
     const s = JSON.parse(r.estado);
-    if(s && Array.isArray(s.employees)){ state = s; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
+    if(s && Array.isArray(s.employees)){ state = s; aplicarPadroes(); try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
     nuvem.versao = r.versao; guardarNuvem();
     render();
     statusNuvem('ok', 'atualizado');
