@@ -136,7 +136,15 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .empty{padding:40px;text-align:center;color:var(--ink-soft);}
 
 .rules{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 18px;font-size:12.5px;color:var(--ink-soft);line-height:1.55;}
-.rules h3{margin:0 0 6px;font-size:13px;color:var(--ink);}
+.rules summary,.explica summary{cursor:pointer;font-weight:700;color:var(--ink);font-size:13px;list-style:none;display:flex;align-items:center;gap:8px;}
+.rules summary::-webkit-details-marker,.explica summary::-webkit-details-marker{display:none;}
+.rules summary::before,.explica summary::before{content:'▸';color:var(--indigo-700);transition:transform .15s;}
+.rules[open] summary::before,.explica[open] summary::before{transform:rotate(90deg);}
+.rules[open] summary{margin-bottom:8px;}
+.explica{border-top:1px solid var(--rule);padding-top:10px;}
+.explica summary{font-size:12.5px;color:var(--indigo-700);}
+.explica[open]{display:flex;flex-direction:column;gap:10px;}
+.dz-linha{display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
 .rules ul{margin:0;padding-left:18px;}
 .rules b{color:var(--ink);}
 
@@ -289,8 +297,8 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
     <div class="tablewrap" id="tablewrap"></div>
   </section>
 
-  <section class="rules no-print">
-    <h3>Como a escala é montada</h3>
+  <details class="rules no-print" id="regras">
+    <summary>Como a escala é montada</summary>
     <ul>
       <li><b>Duas folgas em toda semana</b> (segunda a domingo), conforme a escala 5x2 da EC 141/2026, em vigor a partir de 15/12/2026.</li>
       <li><b>Rodízio de domingos em 3 grupos (A, B e C):</b> cada grupo folga um domingo a cada 3 semanas. Isso garante pelo menos um domingo de folga por mês e atende a regra do comércio (Lei 10.101/2000), que pede folga no domingo pelo menos uma vez a cada 3 semanas.</li>
@@ -306,7 +314,7 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
       <li>Precisa trocar uma folga? Clique no dia para alternar entre T e F. A troca fica marcada com um ponto e os avisos acima mostram se alguma regra deixou de ser cumprida.</li>
       <li>Clique no nome do funcionário para mudar turno, grupo de domingo, folga fixa ou férias. Os dados ficam salvos neste aparelho.</li>
     </ul>
-  </section>
+  </details>
 </main>
 
 <div id="modal-root"></div>
@@ -962,6 +970,7 @@ function render12Painel(){
   const par = (setor, turno) => { const a = conta(setor,turno,'A'), b = conta(setor,turno,'B'); const txt = `turma A ${a}, B ${b}`; return Math.abs(a-b) > 1 ? `<span class="erro">${txt}: desequilibrado, um dia fica com ${Math.abs(a-b)} a menos</span>` : txt; };
   const linha = setor => `${SETORES[setor]}: dia ${conta(setor,'dia')} pessoas (${par(setor,'dia')}) · noite ${conta(setor,'noite')} pessoas (${par(setor,'noite')})`;
   const nManual = Object.keys(cfg.manual||{}).length;
+  const desequilibrio = ['pista','caixas'].some(st=> ['dia','noite'].some(t=> Math.abs(conta(st,t,'A') - conta(st,t,'B')) > 1));
   box.innerHTML = `
     <h3>Escala 12x36</h3>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-soft);">
@@ -983,15 +992,22 @@ function render12Painel(){
         </div>`;
       }).join('')}
     </div>
+    ${desequilibrio ? `<div class="fds">${linha('pista')}<br>${linha('caixas')}</div>` : ''}
+    <div class="dz-linha">
+      ${state.ocultar5x2
+        ? '<button type="button" class="btn btn-light" id="dz-5x2" style="padding:5px 10px;font-size:12px;">Mostrar escala 5x2</button>'
+        : '<button type="button" class="btn btn-light" id="dz-5x2" style="padding:5px 10px;font-size:12px;">Ocultar escala 5x2</button>'}
+      <label class="check" style="font-size:12.5px;"><input type="checkbox" id="dz-indenizado" ${cfg.intervaloIndenizado?'checked':''}> Intervalo indenizado</label>
+    </div>
+    <details class="explica" id="dz-explica" ${ui.explicaAberta ? 'open' : ''}>
+    <summary>Ver explicações</summary>
     <div class="fds">${linha('pista')}<br>${linha('caixas')}</div>
     <div class="fds"><b>Em ${nomeMes(ui.mes)}:</b> turma A trabalha nos dias ${diasDaTurma('A', ui.mes)} e turma B nos dias ${diasDaTurma('B', ui.mes)}. Para trocar alguém de turma, clique na etiqueta da turma ao lado do nome. ${(()=>{ const [y,m] = ui.mes.split('-').map(Number); return new Date(Date.UTC(y,m,0)).getUTCDate()===31 ? 'Este mês tem 31 dias: o dia 31 e o dia 1 do mês seguinte são seguidos, então no próximo mês as turmas invertem par e ímpar.' : ''; })()}</div>
     <div class="fds"><b>Jornada:</b> ${intervalo12Min() ? `${String(span12()/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
     <div class="fds">Cada um trabalha 12 horas e descansa no dia seguinte (dia sim, dia não). A turma A trabalha num dia e a B no outro, então cada posto precisa de 2 pessoas no dia e 2 na noite. Vão pra noite os de turno mais tarde; para trocar alguém de turno ou de turma, clique no nome. Cada um folga um domingo a cada 2 semanas.</div>
-    <div class="fds">${state.ocultar5x2
-      ? 'A escala 5x2 está oculta. <button type="button" class="btn btn-light" id="dz-5x2" style="padding:4px 10px;font-size:12px;">Mostrar escala 5x2</button>'
-      : 'A escala 5x2 está visível no seletor "Modelo de escala". <button type="button" class="btn btn-light" id="dz-5x2" style="padding:4px 10px;font-size:12px;">Ocultar escala 5x2</button>'}</div>
-    <label class="check" style="font-size:12.5px;"><input type="checkbox" id="dz-indenizado" ${cfg.intervaloIndenizado?'checked':''}> Intervalo indenizado no 12x36 (pago, sem parar o trabalho; a lei permite no 12x36)</label>
-    <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>`;
+    <div class="fds"><b>Intervalo indenizado:</b> o intervalo é pago, sem parar o trabalho (a lei permite no 12x36). Aí o plantão fica com 12 horas no posto.</div>
+    <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>
+    </details>`;
 }
 
 // Quem está trabalhando num período: os do próprio turno com T, e na noite também quem está cobrindo (N).
@@ -1630,6 +1646,7 @@ document.addEventListener('change', ev=>{
     salvar(); render();
   }
 });
+document.addEventListener('toggle', ev=>{ if(ev.target && ev.target.id==='dz-explica') ui.explicaAberta = ev.target.open; }, true);
 document.getElementById('f-busca').addEventListener('input', ev=>{ ui.busca = ev.target.value; render(); });
 document.addEventListener('input', ev=>{ if(ev.target && ev.target.id==='m-ent') completarSaida12(); });
 
@@ -1799,45 +1816,72 @@ async function abrirPublicar(){
   modalNuvem(`<div class="nv-msg">Carregando meses publicados…</div>`, 'Publicar escala para a equipe');
   let meses = [];
   try{ const r = await api('mesesPublicados'); if(r.ok) meses = r.meses; }catch(e){}
-  const pub = meses.length ? meses.map(m=>`<div class="nv-item"><div><b>${esc(nomeMes(m.mes))}</b><small>${esc(m.modelo)} · ${esc(m.colaboradores)} colaboradores</small></div>
+  // a equipe vê só o mês atual e o seguinte (a trava fica no servidor)
+  const d = new Date(), mesHoje = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  const janela = [mesHoje, proximoMes(mesHoje, 1)];
+  const pub = meses.length ? meses.map(m=>`<div class="nv-item"><div><b>${esc(nomeMes(m.mes))}</b>${janela.includes(m.mes) ? '<span class="chip chip-ok">a equipe vê agora</span>' : '<span class="chip chip-sem">aguardando</span>'}<small>${esc(m.modelo)} · ${esc(m.colaboradores)} colaboradores</small></div>
       <div class="nv-acoes"><button class="btn btn-danger" data-despublicar="${esc(m.mes)}">Tirar do ar</button></div></div>`).join('')
     : `<div class="nv-msg">Nenhum mês publicado ainda.</div>`;
+  const opcoesQtd = [12, 6, 3, 2, 1].map(n=>`<option value="${n}">${n===12 ? '12 meses (o ano todo)' : n===1 ? 'Só este mês' : n + ' meses'}</option>`).join('');
   modalNuvem(`
     <form id="nv-pub-form" style="display:flex;flex-direction:column;gap:12px;padding:0;">
-      <div class="nv-msg">A equipe só vê o que você publicar. Publicar de novo um mês substitui a versão anterior dele. É publicada a escala do modelo aberto agora: <b>${modelo12() ? '12x36' : '5x2'}</b>.</div>
+      <div class="nv-msg">Publique a partir de um mês e o app já deixa os <b>12 meses seguintes</b> publicados. A equipe vê só <b>o mês atual e o próximo</b>; na virada do mês, o seguinte aparece sozinho. Se mudar algo na escala (novo colaborador, troca de turma), publique de novo: os meses são substituídos pela versão nova. Escala publicada: <b>${modelo12() ? '12x36' : '5x2'}</b>.</div>
       <div class="row2">
-        <div class="field"><label for="nv-de">Do mês</label><input type="month" id="nv-de" required value="${ui.mes}"></div>
-        <div class="field"><label for="nv-ate">Até o mês</label><input type="month" id="nv-ate" required value="${ui.mes}"></div>
+        <div class="field"><label for="nv-de">A partir do mês</label><input type="month" id="nv-de" required value="${ui.mes}"></div>
+        <div class="field"><label for="nv-qtd">Quantos meses</label><select id="nv-qtd">${opcoesQtd}</select></div>
       </div>
+      <div class="nv-msg" id="nv-pub-resumo"></div>
       <div class="nv-msg" id="nv-pub-aviso"></div>
       <div class="modal-actions"><button type="button" class="btn btn-light" id="nv-voltar">Voltar</button><button type="submit" class="btn btn-amber">Publicar</button></div>
     </form>
     <h3 style="margin:6px 0 0;font-size:13px;">Já publicados</h3>
     <div class="nv-lista">${pub}</div>`, 'Publicar escala para a equipe');
+  resumoPublicar();
+}
+function mesesDoForm(){
+  const de = document.getElementById('nv-de').value, qtd = Number(document.getElementById('nv-qtd').value) || 12;
+  if(!de) return [];
+  return Array.from({ length: qtd }, (_, i) => proximoMes(de, i));
+}
+function resumoPublicar(){
+  const el = document.getElementById('nv-pub-resumo'); if(!el) return;
+  const ms = mesesDoForm();
+  el.innerHTML = ms.length ? `Vai publicar <b>${esc(nomeMes(ms[0]))}</b>${ms.length > 1 ? ` até <b>${esc(nomeMes(ms[ms.length-1]))}</b> (${ms.length} meses)` : ''}.` : '';
 }
 async function publicarMeses(ev){
   ev.preventDefault();
-  const de = document.getElementById('nv-de').value, ate = document.getElementById('nv-ate').value;
   const aviso = document.getElementById('nv-pub-aviso');
-  if(!de || !ate || ate < de){ aviso.className = 'nv-msg erro'; aviso.textContent = 'Confira os meses: o final está antes do inicial.'; return; }
-  const meses = [];
-  for(let m = de; m <= ate && meses.length <= 12; m = proximoMes(m, 1)) meses.push(m);
-  if(meses.length > 12){ aviso.className = 'nv-msg erro'; aviso.textContent = 'Publique no máximo 12 meses por vez.'; return; }
+  const meses = mesesDoForm();
+  if(!meses.length){ aviso.className = 'nv-msg erro'; aviso.textContent = 'Escolha o mês inicial.'; return; }
+  aviso.className = 'nv-msg'; aviso.textContent = 'Conferindo as regras dos ' + meses.length + ' meses…';
+  await new Promise(r => setTimeout(r, 30));
   // avisa se tem regra descumprida antes de publicar
   const problemas = [];
   meses.forEach(m=>{ const g = gerar(m); state.employees.forEach(e=>{ if(conferir(e, g).avisos.length) problemas.push(e.nome.split(' ')[0] + ' (' + nomeMes(m) + ')'); }); });
-  if(problemas.length && !confirm('Há regras descumpridas para: ' + [...new Set(problemas)].slice(0,8).join(', ') + (problemas.length>8?'…':'') + '.\n\nPublicar mesmo assim?')) return;
+  if(problemas.length && !confirm('Há regras descumpridas para: ' + [...new Set(problemas)].slice(0,8).join(', ') + (problemas.length>8?'…':'') + '.\n\nPublicar mesmo assim?')){ aviso.textContent = ''; return; }
+  const modelo = modelo12() ? '12x36' : '5x2';
   try{
-    for(const m of meses){
-      aviso.className = 'nv-msg'; aviso.textContent = 'Publicando ' + nomeMes(m) + '…';
-      const r = await api('publicar', { mes:m, modelo: modelo12() ? '12x36' : '5x2', colaboradores: montarPublicacao(m) });
-      if(!r.ok) throw new Error(r.erro || 'Falha ao publicar ' + nomeMes(m));
+    aviso.className = 'nv-msg'; aviso.textContent = 'Publicando ' + meses.length + ' mes' + (meses.length>1?'es':'') + '…';
+    const lote = meses.map(m => ({ mes: m, colaboradores: montarPublicacao(m) }));
+    let r = await api('publicarLote', { modelo, meses: lote });
+    if(!r.ok && /desconhecida/i.test(r.erro || '')){
+      // servidor ainda na versão antiga: publica um mês por vez
+      for(const item of lote){
+        aviso.textContent = 'Publicando ' + nomeMes(item.mes) + '…';
+        const r1 = await api('publicar', { mes: item.mes, modelo, colaboradores: item.colaboradores });
+        if(!r1.ok) throw new Error(r1.erro || 'Falha ao publicar ' + nomeMes(item.mes));
+      }
+      r = { ok: true };
     }
+    if(!r.ok) throw new Error(r.erro || 'Falha ao publicar.');
     await abrirPublicar();
     const a2 = document.getElementById('nv-pub-aviso');
-    a2.className = 'nv-msg ok'; a2.textContent = 'Publicado: ' + meses.map(nomeMes).join(', ') + '. A equipe já pode ver.';
+    a2.className = 'nv-msg ok';
+    a2.textContent = 'Publicado de ' + nomeMes(meses[0]) + ' a ' + nomeMes(meses[meses.length-1]) + '. A equipe vê o mês atual e o seguinte.';
   }catch(e){ aviso.className = 'nv-msg erro'; aviso.textContent = e.message; }
 }
+document.addEventListener('change', ev=>{ if(ev.target && (ev.target.id==='nv-de' || ev.target.id==='nv-qtd')) resumoPublicar(); });
+document.addEventListener('input', ev=>{ if(ev.target && ev.target.id==='nv-de') resumoPublicar(); });
 
 // ---------- senhas dos colaboradores ----------
 async function abrirAcessos(msgHtml){
