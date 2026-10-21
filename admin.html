@@ -104,9 +104,9 @@ td.c{text-align:center;padding:3px 2px;}
 .cel.T{background:var(--trab);color:var(--trab-ink);}
 .cel.F{background:var(--folga);color:var(--folga-ink);border-color:#F2B8C0;}
 .cel.V{background:var(--ferias);color:var(--ferias-ink);cursor:default;font-size:9px;}
-.cel.N{background:var(--indigo-900);color:#fff;}
-.cel.D{background:#0E7490;color:#fff;}
-.cel.C{background:#B45309;color:#fff;}
+.cel.N{background:var(--trab);color:var(--trab-ink);}
+.cel.D{background:var(--trab);color:var(--trab-ink);}
+.cel.C{background:var(--trab);color:var(--trab-ink);}
 .tag-caixa{background:#B45309;color:#fff;}
 .revez{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;}
 .revez h3{margin:0;font-size:13.5px;}
@@ -282,9 +282,6 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
       <div class="legend">
         <span><i style="background:var(--trab);color:var(--trab-ink)">T</i> Trabalha</span>
         <span><i style="background:var(--folga);color:var(--folga-ink)">F</i> Folga</span>
-        <span><i style="background:var(--indigo-900);color:#fff">N</i> Noite (22:00 às 06:00; caixas no domingo, plantão 19:00 às 06:00)</span>
-        <span><i style="background:#0E7490;color:#fff">D</i> Plantão do domingo (07:00 às 19:00)</span>
-        <span><i style="background:#B45309;color:#fff">C</i> Frentista no caixa à noite (22:00 às 06:00)</span>
         <span><i style="background:var(--ferias);color:var(--ferias-ink)">FÉ</i> Férias</span>
         <span class="no-print"><i style="background:var(--trab);position:relative;"><b style="position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:var(--indigo-700)"></b></i> Ajustado à mão</span>
       </div>
@@ -608,6 +605,8 @@ function periodosCobertura(lista){
   if(modelo12()) return ['dia','noite'];
   return Object.keys(PERIODOS).filter(p=> lista.some(e=>periodo(e.turno)===p));
 }
+// Letra que aparece na escala: todo dia de trabalho é T (a cor mostra se é dia, noite etc.); folga é F
+const letraDia = s => s==='V' ? 'FÉ' : s==='F' ? 'F' : 'T';
 const NOME_PERIODO = { manha:'Manhã', tarde:'Tarde', noite:'Noite', dia:'Dia' };
 // mínimo de pessoas por período (cada modelo guarda os seus)
 function minimo(setor, p){
@@ -1116,7 +1115,7 @@ function render(){
       const k = e.id + '|' + toIso(t);
       const s = valor(g, e.id, t);
       const ov = state.overrides[k] && s!=='V';
-      const txt = s==='V' ? 'FÉ' : s;
+      const txt = letraDia(s);
       const noite = (e.setor==='caixas' && revez() && dow(t)===0) ? 'plantão 19:00 às 06:00' : '22:00 às 06:00';
       const tip = d12
         ? `${ddmm(t)}: ${s==='D'?'plantão do dia, '+horarioDe(e, d12):s==='N'?'plantão da noite, '+horarioDe(e, d12):s==='F'?'folga':'férias'}${ov?' (ajustado à mão)':''}`
@@ -1301,7 +1300,7 @@ function exportarExcel(){
       const itx = intervaloDe(e, d12x, autoX);
       linhas.push([horarioDe(e, d12x), itx ? (itx.indenizado ? 'Indenizado' : itx.ini + ' às ' + itx.fim) : '-', e.nome,
         d12x ? (d12x[e.id].turno==='dia' ? 'Dia' : 'Noite') + ' turma ' + d12x[e.id].turma : e.folgaFixa ? 'Folga fixa' : e.domingo,
-        ...dias.map(t=>{ const s = valor(g, e.id, t); return s==='V' ? 'FÉRIAS' : s==='N' ? 'NOITE' : s==='D' ? 'DIA 12H' : s==='C' ? 'CAIXA NOITE' : s; }), c.domF]);
+        ...dias.map(t=>{ const s = valor(g, e.id, t); return s==='V' ? 'FÉRIAS' : letraDia(s); }), c.domF]);
     });
     linhas.push([]);
     periodosCobertura(lista).forEach(p=>{
@@ -1370,9 +1369,9 @@ function exportarPdf(meses, setores){
   const COR = {
     T:{fill:[187,235,204], text:[20,95,52]},
     F:{fill:[248,190,198], text:[150,20,40]},
-    N:{fill:[49,46,129],   text:[255,255,255]},
-    D:{fill:[14,116,144],  text:[255,255,255]},
-    C:{fill:[180,83,9],    text:[255,255,255]},
+    N:{fill:[187,235,204], text:[20,95,52]},
+    D:{fill:[187,235,204], text:[20,95,52]},
+    C:{fill:[187,235,204], text:[20,95,52]},
     'FÉ':{fill:[253,240,213], text:[154,91,10]},
   };
   const geradoEm = 'Gerado em ' + new Date().toLocaleDateString('pt-BR');
@@ -1398,10 +1397,10 @@ function exportarPdf(meses, setores){
       doc.text(titulo.charAt(0).toUpperCase() + titulo.slice(1), 8, 17);
       doc.setFontSize(7.5); doc.setTextColor(94,102,128);
       doc.text(modelo12()
-        ? 'D = plantão do dia (' + horario12(setor).dia + ')   N = plantão da noite (' + horario12(setor).noite + ')   F = folga   FÉ = férias   ·   Turma A: dias ' + diasDaTurma('A', mes) + '   Turma B: dias ' + diasDaTurma('B', mes)
+        ? 'T = trabalha (dia ' + horario12(setor).dia + ' · noite ' + horario12(setor).noite + ')   F = folga   FÉ = férias   ·   Turma A: dias ' + diasDaTurma('A', mes) + '   Turma B: dias ' + diasDaTurma('B', mes)
         : setor==='caixas' && revez()
-        ? 'T = trabalha no turno   F = folga   D = plantão do domingo (07:00 às 19:00)   N = noite (22:00 às 06:00; no domingo, plantão 19:00 às 06:00)   FÉ = férias'
-        : 'T = trabalha no turno   F = folga   N = cobre a noite (22:00 às 06:00)   C = cobre o caixa à noite (22:00 às 06:00)   FÉ = férias', 8, 22);
+        ? 'T = trabalha (no domingo, plantões de 07:00 às 19:00 e 19:00 às 06:00)   F = folga   FÉ = férias'
+        : 'T = trabalha   F = folga   FÉ = férias', 8, 22);
       const fsPdf = setor==='caixas' ? frentistaSabado() : null;
       if(fsPdf){
         const f = state.employees.find(x=>x.id===fsPdf);
@@ -1432,7 +1431,7 @@ function exportarPdf(meses, setores){
         const hr = partesTurno(horarioDe(e, d12p));
         const itp = intervaloDe(e, d12p, autoPdf);
         const intTxt = itp ? (itp.indenizado ? '\nInt. indenizado' : '\nInt. ' + itp.ini + '-' + itp.fim) : '';
-        body.push([e.nome + '\n' + extra.replace(/^ · /, ''), hr[0] + ' às ' + hr[1] + intTxt, ...dias.map(t=>{ const s = valor(g, e.id, t); return s==='V' ? 'FÉ' : s; }), String(conferir(e, g).domF)]);
+        body.push([e.nome + '\n' + extra.replace(/^ · /, ''), hr[0] + ' às ' + hr[1] + intTxt, ...dias.map(t=>{ const s = valor(g, e.id, t); return { content: letraDia(s), codigo: s==='V' ? 'FÉ' : s }; }), String(conferir(e, g).domF)]);
         meta.push({ tipo:'func', n: meta.filter(x=>x.tipo==='func').length });
       });
       periodosCobertura(lista).forEach(p=>{
@@ -1479,7 +1478,7 @@ function exportarPdf(meses, setores){
           // horário em destaque: negrito, maior e com fundo amarelo
           if(col === 1){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 7.2; d.cell.styles.fillColor = zebra ? [253,230,160] : [254,243,199]; d.cell.styles.textColor = [120,53,15]; return; }
           if(ehDia){
-            const c = COR[d.cell.raw];
+            const c = COR[d.cell.raw && d.cell.raw.codigo ? d.cell.raw.codigo : d.cell.raw];
             if(c){ d.cell.styles.fillColor = c.fill; d.cell.styles.textColor = c.text; d.cell.styles.fontStyle = 'bold'; }
           }
           if(col === dias.length + 2){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fontSize = 7.6; d.cell.styles.fillColor = zebra ? [236,239,246] : [255,255,255]; if(d.cell.raw==='0') d.cell.styles.textColor = [180,35,53]; }
