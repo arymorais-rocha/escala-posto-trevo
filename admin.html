@@ -457,8 +457,8 @@ const hhmm = min => { const x = mod(min, 1440); return String(Math.floor(x/60)).
 function intervalo12Min(){ return cfg12().intervaloIndenizado ? 0 : Math.min(120, Math.max(60, Number(state.intervaloMin) || 60)); }
 // Os caixas no 12x36 não têm intervalo: plantão de 12 horas certas
 const CAIXA_SEM_INTERVALO = true;
-// ...e quem trabalha à noite (pista ou caixa) também não tem intervalo
-function semIntervalo12(setor, turno){ return (CAIXA_SEM_INTERVALO && setor === 'caixas') || turno === 'noite'; }
+// (a noite da pista tem intervalo normalmente; só os caixas trabalham 12h corridas)
+function semIntervalo12(setor, turno){ return CAIXA_SEM_INTERVALO && setor === 'caixas'; }
 function span12(setor, turno){ return 720 + (semIntervalo12(setor, turno) ? 0 : intervalo12Min()); }
 const faixa = (ini, setor, turno) => ini + ' às ' + hhmm(minutos(ini) + span12(setor, turno));
 // entrada à tarde/noite (15h às 3h) = plantão da noite
@@ -1010,8 +1010,8 @@ function render12Painel(){
     <summary>Ver explicações</summary>
     <div class="fds">${linha('pista')}<br>${linha('caixas')}</div>
     <div class="fds"><b>Em ${nomeMes(ui.mes)}:</b> turma A trabalha nos dias ${diasDaTurma('A', ui.mes)} e turma B nos dias ${diasDaTurma('B', ui.mes)}. Para trocar alguém de turma, clique na etiqueta da turma ao lado do nome. ${(()=>{ const [y,m] = ui.mes.split('-').map(Number); return new Date(Date.UTC(y,m,0)).getUTCDate()===31 ? 'Este mês tem 31 dias: o dia 31 e o dia 1 do mês seguinte são seguidos, então no próximo mês as turmas invertem par e ímpar.' : ''; })()}</div>
-    <div class="fds"><b>Caixas e noite:</b> plantão de 12 horas certas, sem intervalo (a saída é calculada 12h depois da entrada).</div>
-    <div class="fds"><b>Jornada do dia na pista:</b> ${intervalo12Min() ? `${String(span12('pista','dia')/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
+    <div class="fds"><b>Caixas:</b> plantão de 12 horas certas, sem intervalo (a saída é calculada 12h depois da entrada).</div>
+    <div class="fds"><b>Jornada da pista (dia e noite):</b> ${intervalo12Min() ? `${String(span12('pista','dia')/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
     <div class="fds">Cada um trabalha 12 horas e descansa no dia seguinte (dia sim, dia não). A turma A trabalha num dia e a B no outro, então cada posto precisa de 2 pessoas no dia e 2 na noite. Vão pra noite os de turno mais tarde; para trocar alguém de turno ou de turma, clique no nome. Cada um folga um domingo a cada 2 semanas.</div>
     <div class="fds"><b>Intervalo indenizado:</b> o intervalo é pago, sem parar o trabalho (a lei permite no 12x36). Aí o plantão fica com 12 horas no posto.</div>
     <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>
@@ -1215,7 +1215,7 @@ function abrirModal(id){
             : `Em branco, o app escolhe sozinho${intAuto ? ` (hoje: <b>${esc(intAuto.ini)} às ${esc(intAuto.fim)}</b>)` : ''}. Ao escolher o início, o fim é preenchido com a duração padrão.`}
         </div>
         <div class="hint" style="font-size:11.5px;color:var(--ink-soft);margin-top:-6px;line-height:1.45;">
-          Este horário vale para a escala <b>${modelo12() ? '12x36' : '5x2'}</b>, que está aberta agora.${modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha: caixas e noite 12 horas depois (sem intervalo); dia da pista ${String(span12('pista','dia')/60).replace('.', ',')} horas depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
+          Este horário vale para a escala <b>${modelo12() ? '12x36' : '5x2'}</b>, que está aberta agora.${modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha: caixas 12 horas depois (sem intervalo); pista ${String(span12('pista','dia')/60).replace('.', ',')} horas depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
           ${e ? (modelo12() ? `No 5x2 ele continua ${esc(e.turno)}.` : `No 12x36: ${e.h12 ? esc(e.h12.ini + ' às ' + e.h12.fim) : 'horário do setor'}.`) : ''}
         </div>
         <div class="field"><label for="m-domingo">Grupo de domingo</label>
