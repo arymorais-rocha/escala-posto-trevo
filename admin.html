@@ -455,11 +455,17 @@ const hhmm = min => { const x = mod(min, 1440); return String(Math.floor(x/60)).
 // Jornada do 12x36 na escala: 12 horas trabalhadas + o intervalo (ex.: 13h de permanência com 1h de intervalo).
 // Com intervalo indenizado, a permanência é de 12 horas.
 function intervalo12Min(){ return cfg12().intervaloIndenizado ? 0 : Math.min(120, Math.max(60, Number(state.intervaloMin) || 60)); }
-function span12(){ return 720 + intervalo12Min(); }
-const faixa = ini => ini + ' às ' + hhmm(minutos(ini) + span12());
+// Os caixas no 12x36 não têm intervalo: plantão de 12 horas certas
+const CAIXA_SEM_INTERVALO = true;
+// ...e quem trabalha à noite (pista ou caixa) também não tem intervalo
+function semIntervalo12(setor, turno){ return (CAIXA_SEM_INTERVALO && setor === 'caixas') || turno === 'noite'; }
+function span12(setor, turno){ return 720 + (semIntervalo12(setor, turno) ? 0 : intervalo12Min()); }
+const faixa = (ini, setor, turno) => ini + ' às ' + hhmm(minutos(ini) + span12(setor, turno));
+// entrada à tarde/noite (15h às 3h) = plantão da noite
+const turnoPelaEntrada = ent => { const h = horaEntrada(ent); return (h >= 15 || h < 4) ? 'noite' : 'dia'; };
 function horario12(setor){
-  const h = inicios12(setor || 'pista');
-  return { dia: faixa(h.dia), noite: faixa(h.noite) };
+  const st = setor || 'pista', h = inicios12(st);
+  return { dia: faixa(h.dia, st, 'dia'), noite: faixa(h.noite, st, 'noite') };
 }
 // confere se dia + noite cobrem as 24 horas sem buraco nem sobreposição
 function checarHorario12(setor){
@@ -578,6 +584,7 @@ function intervalosAuto(d12){
 }
 // intervalo de um funcionário no modelo aberto: o escolhido à mão ou o automático
 function intervaloDe(e, d12, autoMap){
+  if(modelo12() && semIntervalo12(e.setor, (d12 || distribuicao12())[e.id] ? (d12 || distribuicao12())[e.id].turno : 'dia')) return { indenizado:true, semIntervalo:true, texto:'Sem intervalo' };
   if(modelo12() && cfg12().intervaloIndenizado) return { indenizado:true, texto:'Intervalo indenizado' };
   const manual = e.intervalos && e.intervalos[chaveModelo()];
   if(manual && manual.ini && manual.fim) return { ...manual, auto:false, texto: manual.ini + '-' + manual.fim };
@@ -1003,7 +1010,8 @@ function render12Painel(){
     <summary>Ver explicações</summary>
     <div class="fds">${linha('pista')}<br>${linha('caixas')}</div>
     <div class="fds"><b>Em ${nomeMes(ui.mes)}:</b> turma A trabalha nos dias ${diasDaTurma('A', ui.mes)} e turma B nos dias ${diasDaTurma('B', ui.mes)}. Para trocar alguém de turma, clique na etiqueta da turma ao lado do nome. ${(()=>{ const [y,m] = ui.mes.split('-').map(Number); return new Date(Date.UTC(y,m,0)).getUTCDate()===31 ? 'Este mês tem 31 dias: o dia 31 e o dia 1 do mês seguinte são seguidos, então no próximo mês as turmas invertem par e ímpar.' : ''; })()}</div>
-    <div class="fds"><b>Jornada:</b> ${intervalo12Min() ? `${String(span12()/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
+    <div class="fds"><b>Caixas e noite:</b> plantão de 12 horas certas, sem intervalo (a saída é calculada 12h depois da entrada).</div>
+    <div class="fds"><b>Jornada do dia na pista:</b> ${intervalo12Min() ? `${String(span12('pista','dia')/60).replace('.', ',')}h no posto com ${intervalo12Min()===60 ? '1h' : String(intervalo12Min()/60).replace('.', ',') + 'h'} de intervalo = <b>12h trabalhadas</b>. Por isso os dois turnos se cruzam ${intervalo12Min()===60 ? '1 hora' : String(intervalo12Min()/60).replace('.', ',') + 'h'} na troca, o que ajuda na passagem do caixa e da pista.` : '12h no posto com intervalo indenizado = 12h trabalhadas.'}</div>
     <div class="fds">Cada um trabalha 12 horas e descansa no dia seguinte (dia sim, dia não). A turma A trabalha num dia e a B no outro, então cada posto precisa de 2 pessoas no dia e 2 na noite. Vão pra noite os de turno mais tarde; para trocar alguém de turno ou de turma, clique no nome. Cada um folga um domingo a cada 2 semanas.</div>
     <div class="fds"><b>Intervalo indenizado:</b> o intervalo é pago, sem parar o trabalho (a lei permite no 12x36). Aí o plantão fica com 12 horas no posto.</div>
     <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>
@@ -1135,7 +1143,7 @@ function render(){
     html += `<tr><td class="nome">
       <button class="emp-btn" data-edit="${e.id}" title="Editar funcionário">${esc(e.nome)}</button>
       <div class="meta"><b style="color:var(--ink);">${esc(horarioDe(e, d12))}</b>${tag}</div>
-      ${(()=>{ const it = intervaloDe(e, d12, autoInt); return it ? `<div class="meta">${it.indenizado ? 'Intervalo indenizado' : `Intervalo <b style="color:var(--ink);">${esc(it.ini)} às ${esc(it.fim)}</b>${it.auto ? ' (automático)' : ''}`}</div>` : ''; })()}
+      ${(()=>{ const it = intervaloDe(e, d12, autoInt); return it ? `<div class="meta">${it.indenizado ? esc(it.texto) : `Intervalo <b style="color:var(--ink);">${esc(it.ini)} às ${esc(it.fim)}</b>${it.auto ? ' (automático)' : ''}`}</div>` : ''; })()}
       ${c.avisos.length ? `<div class="warn" title="${esc(c.avisos.join('\n'))}">⚠ ${c.avisos.length} aviso${c.avisos.length>1?'s':''}</div>` : ''}
     </td>`;
     dias.forEach(t=>{
@@ -1168,7 +1176,10 @@ function completarSaida12(){
   if(!modelo12()) return;
   const ent = document.getElementById('m-ent'), sai = document.getElementById('m-sai');
   if(!ent || !sai || !/^\d{2}:\d{2}/.test(ent.value)) return;
-  sai.value = hhmm(minutos(ent.value.slice(0,5)) + span12());
+  const st = document.getElementById('m-setor');
+  const t12 = document.getElementById('m-12turno');
+  const turno = (t12 && t12.value) || turnoPelaEntrada(ent.value.slice(0,5));
+  sai.value = hhmm(minutos(ent.value.slice(0,5)) + span12(st ? st.value : 'pista', turno));
 }
 function abrirModal(id){
   ui.editId = id || null;
@@ -1204,7 +1215,7 @@ function abrirModal(id){
             : `Em branco, o app escolhe sozinho${intAuto ? ` (hoje: <b>${esc(intAuto.ini)} às ${esc(intAuto.fim)}</b>)` : ''}. Ao escolher o início, o fim é preenchido com a duração padrão.`}
         </div>
         <div class="hint" style="font-size:11.5px;color:var(--ink-soft);margin-top:-6px;line-height:1.45;">
-          Este horário vale para a escala <b>${modelo12() ? '12x36' : '5x2'}</b>, que está aberta agora.${modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha ${span12()/60 === 12 ? '12 horas' : String(span12()/60).replace('.', ',') + ' horas'} depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
+          Este horário vale para a escala <b>${modelo12() ? '12x36' : '5x2'}</b>, que está aberta agora.${modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha: caixas e noite 12 horas depois (sem intervalo); dia da pista ${String(span12('pista','dia')/60).replace('.', ',')} horas depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
           ${e ? (modelo12() ? `No 5x2 ele continua ${esc(e.turno)}.` : `No 12x36: ${e.h12 ? esc(e.h12.ini + ' às ' + e.h12.fim) : 'horário do setor'}.`) : ''}
         </div>
         <div class="field"><label for="m-domingo">Grupo de domingo</label>
@@ -1325,7 +1336,7 @@ function exportarExcel(){
     lista.forEach(e=>{
       const c = conferir(e, g);
       const itx = intervaloDe(e, d12x, autoX);
-      linhas.push([horarioDe(e, d12x), itx ? (itx.indenizado ? 'Indenizado' : itx.ini + ' às ' + itx.fim) : '-', e.nome,
+      linhas.push([horarioDe(e, d12x), itx ? (itx.indenizado ? itx.texto : itx.ini + ' às ' + itx.fim) : '-', e.nome,
         d12x ? (d12x[e.id].turno==='dia' ? 'Dia' : 'Noite') + ' turma ' + d12x[e.id].turma : e.folgaFixa ? 'Folga fixa' : e.domingo,
         ...dias.map(t=>{ const s = valor(g, e.id, t); return s==='V' ? 'FÉRIAS' : letraDia(s); }), c.domF]);
     });
@@ -1457,7 +1468,7 @@ function exportarPdf(meses, setores){
           : ' · dom. ' + e.domingo;
         const hr = partesTurno(horarioDe(e, d12p));
         const itp = intervaloDe(e, d12p, autoPdf);
-        const intTxt = itp ? (itp.indenizado ? '\nInt. indenizado' : '\nInt. ' + itp.ini + '-' + itp.fim) : '';
+        const intTxt = itp ? (itp.indenizado ? (itp.semIntervalo ? '\nSem intervalo' : '\nInt. indenizado') : '\nInt. ' + itp.ini + '-' + itp.fim) : '';
         body.push([e.nome + '\n' + extra.replace(/^ · /, ''), hr[0] + ' às ' + hr[1] + intTxt, ...dias.map(t=>{ const s = valor(g, e.id, t); return { content: letraDia(s), codigo: s==='V' ? 'FÉ' : s }; }), String(conferir(e, g).domF)]);
         meta.push({ tipo:'func', n: meta.filter(x=>x.tipo==='func').length });
       });
@@ -1602,7 +1613,7 @@ document.addEventListener('change', ev=>{
     return;
   }
   if(el.id==='f-modo'){ state.modoPista = el.value; salvar(); render(); return; }
-  if(el.id==='m-ent') { completarSaida12(); return; }
+  if(el.id==='m-ent' || el.id==='m-setor' || el.id==='m-12turno') { completarSaida12(); return; }
   if(el.id==='m-int-ini' && el.value){
     // fim = início + duração do intervalo para a jornada digitada
     const dt = mod(minutos(document.getElementById('m-sai').value) - minutos(document.getElementById('m-ent').value), 1440) || 1440;
@@ -1805,7 +1816,7 @@ function montarPublicacao(mes){
     }
     lista.push({
       id: e.id, nome: e.nome, setor: e.setor, mes, modelo: modelo12() ? '12x36' : '5x2',
-      horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? 'Indenizado' : it.ini + ' às ' + it.fim) : '',
+      horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? it.texto : it.ini + ' às ' + it.fim) : '',
       info: infoEscala(e, d12, mes), domingosFolga: conferir(e, g).domF, dias,
       geradoEm: new Date().toISOString()
     });
@@ -2015,7 +2026,7 @@ function montarRelDias(de, ate, setor, ordem, separar){
     filtrarSetor(state.employees, setor).forEach(e=>{
       const it = intervaloDe(e, d12, autoI);
       const d = descreverDia(e, valor(g, e.id, t), t, d12, it);
-      const linha = { nome:e.nome, setor:e.setor, situacao:d.txt, horario:d.h, intervalo:d.i || (it && it.indenizado && d.h ? 'Indenizado' : ''), codigo:d.s };
+      const linha = { nome:e.nome, setor:e.setor, situacao:d.txt, horario:d.h, intervalo:d.i || (it && it.indenizado && d.h ? it.texto : ''), codigo:d.s };
       (d.s==='F' || d.s==='V' ? fora : trab).push(linha);
     });
     const grupos = separar && setor==='todos'
@@ -2030,7 +2041,7 @@ function montarRelQuadro(setor, ordem, separar){
   const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
   const linhas = filtrarSetor(state.employees, setor).map(e=>{
     const it = intervaloDe(e, d12, autoI);
-    return { nome:e.nome, setor:e.setor, horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? 'Indenizado' : it.ini + ' às ' + it.fim) : '', situacao: infoEscala(e, d12, ui.mes) };
+    return { nome:e.nome, setor:e.setor, horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? it.texto : it.ini + ' às ' + it.fim) : '', situacao: infoEscala(e, d12, ui.mes) };
   });
   const grupos = separar && setor==='todos'
     ? ['pista','caixas'].map(st=>({ titulo: SETORES[st], linhas: ordenarLinhas(linhas.filter(l=>l.setor===st), ordem) })).filter(x=>x.linhas.length)
