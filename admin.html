@@ -1133,7 +1133,7 @@ function render(){
       html += `<tr class="grp"><td class="nome">${grp.nome} · ${n}</td><td colspan="${dias.length+1}"></td></tr>`;
     }
     const c = conf[e.id];
-    const tag = d12 ? `<span class="tag tag-${d12[e.id].turno==='dia'?'a':'noite'}">12x36 · ${d12[e.id].turno==='dia'?'dia':'noite'}</span><button type="button" class="tag tag-turma tag-turma-${d12[e.id].turma}" data-turma="${e.id}" title="Clique para passar para a turma ${d12[e.id].turma==='A'?'B':'A'} (dias ${diasDaTurma(d12[e.id].turma==='A'?'B':'A', ui.mes)})">${esc(nomeTurma(d12[e.id].turma, ui.mes))} ⇄</button>` : (titularSabado(e) ? `<span class="tag tag-fixa">Folga qua e dom</span>`
+    const tag = d12 ? `<span class="tag tag-${d12[e.id].turno==='dia'?'a':'noite'}">12x36 · ${d12[e.id].turno==='dia'?'dia':'noite'}</span><button type="button" class="tag tag-turma tag-turma-${d12[e.id].turma}" data-turma="${e.id}" title="Trocar para a turma ${d12[e.id].turma==='A'?'B':'A'} (dias ${diasDaTurma(d12[e.id].turma==='A'?'B':'A', ui.mes)}). Pede confirmação antes.">${esc(nomeTurma(d12[e.id].turma, ui.mes))} ⇄</button>` : (titularSabado(e) ? `<span class="tag tag-fixa">Folga qua e dom</span>`
         : e.folgaFixa ? `<span class="tag tag-fixa">Folga fixa sáb/dom</span>`
         : fasesTela[e.id] !== undefined ? `<span class="tag tag-${['a','b','c','a'][fasesTela[e.id]]}">Rodízio fase ${fasesTela[e.id]+1}</span>`
         : `<span class="tag tag-${(e.domingo||'a').toLowerCase()}">Dom. ${esc(e.domingo)}</span>`)
@@ -1550,8 +1550,16 @@ document.addEventListener('click', ev=>{
     const id = Number(el.dataset.turma), e = state.employees.find(x=>x.id===id);
     if(!e) return;
     const atual = distribuicao12()[id];
+    const nova = atual.turma==='A' ? 'B' : 'A';
+    // pede confirmação: a troca muda todos os dias de trabalho da pessoa
+    const ok = confirm(`Mudar ${e.nome} de turma?\n\n` +
+      `De: ${nomeTurma(atual.turma, ui.mes)}\n` +
+      `Para: ${nomeTurma(nova, ui.mes)}\n\n` +
+      `Os dias de trabalho e de folga dele mudam em todos os meses. ` +
+      `A equipe só vê a mudança depois que você publicar de novo.`);
+    if(!ok) return;
     congelar12(e.setor);
-    cfg12().manual[id] = { turno: atual.turno, turma: atual.turma==='A' ? 'B' : 'A' };
+    cfg12().manual[id] = { turno: atual.turno, turma: nova };
     salvar(); render();
     return;
   }
