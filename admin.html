@@ -2159,8 +2159,9 @@ function montarRelQuadro(setor, ordem, separar, lado){
 }
 
 // Lista de horários: uma linha por funcionário, com entrada, saída e intervalo em colunas separadas
-function montarRelLista(setor, ordem, separar){
+function montarRelLista(setor, ordem, separar, lado){
   const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  lado = lado && !!d12;
   const linhas = filtrarSetor(state.employees, setor).map(e=>{
     const h = horarioDe(e, d12), [ent, sai] = partesTurno(h), it = intervaloDe(e, d12, autoI);
     return {
@@ -2168,9 +2169,11 @@ function montarRelLista(setor, ordem, separar){
       intIni: it && !it.indenizado ? it.ini : '', intFim: it && !it.indenizado ? it.fim : '',
       intervalo: it ? (it.indenizado ? it.texto : it.ini + ' às ' + it.fim) : 'Sem intervalo',
       semInt: !it || it.indenizado, intTexto: it && it.indenizado ? it.texto : (!it ? 'Sem intervalo' : ''),
-      turno: d12 ? (d12[e.id].turno==='dia' ? 'Dia' : 'Noite') + ' · Turma ' + d12[e.id].turma : (periodo(e.turno)==='manha' ? 'Manhã' : periodo(e.turno)==='tarde' ? 'Tarde' : 'Noite'),
+      turno: d12 ? (d12[e.id].turno==='dia' ? 'Dia' : 'Noite') + (lado ? '' : ' · Turma ' + d12[e.id].turma) : (periodo(e.turno)==='manha' ? 'Manhã' : periodo(e.turno)==='tarde' ? 'Tarde' : 'Noite'),
+      turma: d12 ? d12[e.id].turma : '',
     };
   });
+  if(lado) return { tipo:'lista', setor, ordem, lado:true, lados: gruposLado(linhas, setor, separar, ordem, ui.mes), total: linhas.length };
   const grupos = separar && setor==='todos'
     ? ['pista','caixas'].map(st=>({ titulo: SETORES[st], linhas: ordenarLinhas(linhas.filter(l=>l.setor===st), ordem) })).filter(x=>x.linhas.length)
     : [{ titulo:'', linhas: ordenarLinhas(linhas, ordem) }];
@@ -2200,6 +2203,9 @@ function htmlLados(gps, comSetor){
 }
 function htmlRelatorio(r){
   const comSetor = r.setor==='todos';
+  if(r.tipo==='lista' && r.lado) return `<div class="nv-msg">${r.total} funcionários.</div>` + r.lados.map(gp=>`${gp.titulo?`<h5 class="rel-sub">${esc(gp.titulo)}</h5>`:''}
+    <div class="rel-lados">${['A','B'].map(k=>`<div class="rel-lado rel-lado-${k}"><div class="rel-lado-tit">${esc(gp[k].rotulo)} <span>${gp[k].linhas.length} pessoa${gp[k].linhas.length===1?'':'s'}</span></div>
+      ${gp[k].linhas.length ? htmlTabelaLista(gp[k].linhas, comSetor && !gp.titulo) : '<div class="nv-msg">Ninguém nesta turma.</div>'}</div>`).join('')}</div>`).join('');
   if(r.tipo==='lista') return `<div class="nv-msg">${r.total} funcionários.</div>` + r.grupos.map(gp=>`${gp.titulo?`<h4 class="rel-sub">${esc(gp.titulo)} · ${gp.linhas.length}</h4>`:''}${htmlTabelaLista(gp.linhas, comSetor && !gp.titulo)}`).join('');
   if(r.tipo==='quadro' && r.lado) return htmlLados(r.lados, comSetor);
   if(r.tipo==='quadro'){
@@ -2239,7 +2245,7 @@ function abrirRelatorios(){
             <select id="rel-setor"><option value="todos">Pista e caixas</option><option value="pista">Só pista</option><option value="caixas">Só caixas</option></select></div>
           <div style="display:flex;flex-direction:column;gap:6px;align-self:end;padding-bottom:6px;">
             <label class="check"><input type="checkbox" id="rel-separar" checked> Separar pista e caixas</label>
-            ${modelo12() ? `<label class="check"><input type="checkbox" id="rel-lado" ${ui.relLado ? 'checked' : ''}> Turma A e Turma B lado a lado</label>` : ''}
+            ${modelo12() ? `<label class="check"><input type="checkbox" id="rel-lado" ${ui.relLado !== false ? 'checked' : ''}> Turma A e Turma B lado a lado</label>` : ''}
           </div>
         </div>
         <div class="nv-msg">Escala usada: <b>${modelo12() ? '12x36' : '5x2'}</b> (a que está aberta agora).</div>
@@ -2259,8 +2265,7 @@ function lerRelForm(){
   const setor = document.getElementById('rel-setor').value, ordem = document.getElementById('rel-ordem').value;
   const separar = document.getElementById('rel-separar').checked;
   const cl = document.getElementById('rel-lado'); const lado = !!(cl && cl.checked); ui.relLado = lado;
-  const cxLado = document.getElementById('rel-lado'); if(cxLado) cxLado.closest('label').hidden = tipo === 'lista';
-  if(tipo==='lista') return montarRelLista(setor, ordem, separar);
+  if(tipo==='lista') return montarRelLista(setor, ordem, separar, lado);
   if(tipo==='quadro') return montarRelQuadro(setor, ordem, separar, lado);
   let de = document.getElementById('rel-de').value, ate = document.getElementById('rel-ate').value;
   if(!de) de = hojeIsoDia(); if(!ate || ate < de) ate = de;
@@ -2343,7 +2348,41 @@ function pdfRelatorio(){
       y = fim + 5;
     });
   };
-  if(r.tipo==='lista'){
+  if(r.tipo==='lista' && r.lado){
+    const larg = (W - 20 - 6) / 2;
+    r.lados.forEach(gp=>{
+      const comSetor = r.setor==='todos' && !gp.titulo;
+      const altura = Math.max(gp.A.linhas.length, gp.B.linhas.length) * 6 + 22;
+      if(y + Math.min(altura, 60) > H - 10){ doc.addPage(); cabecalho(); y = 23; }
+      if(gp.titulo){ doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(30,27,75); doc.text(gp.titulo, 10, y + 4); y += 6; }
+      const y0 = y; let fim = y;
+      ['A','B'].forEach((k, i)=>{
+        const x = 10 + i * (larg + 6), lado = gp[k];
+        doc.setFillColor(...(k==='A' ? [4,120,87] : [194,65,12])); doc.rect(x, y0, larg, 6.5, 'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(255,255,255);
+        doc.text(lado.rotulo + '  ·  ' + lado.linhas.length + ' pessoa' + (lado.linhas.length===1?'':'s'), x + 2, y0 + 4.5);
+        if(!lado.linhas.length){ fim = Math.max(fim, y0 + 12); return; }
+        const head = [['#','Funcionário', ...(comSetor?['Setor']:[]), 'Turno', 'Entrada', 'Saída', 'Início int.', 'Fim int.']];
+        const body = lado.linhas.map((l,j)=>[String(j+1), l.nome, ...(comSetor?[l.setor==='pista'?'Pista':'Caixa']:[]), l.turno, l.entrada, l.saida,
+          ...(l.semInt ? [{ content: l.intTexto, colSpan: 2 }] : [l.intIni, l.intFim])]);
+        const c0 = comSetor ? 4 : 3;
+        doc.autoTable({
+          startY: y0 + 6.5, head, body, theme:'grid', tableWidth: larg,
+          margin:{ left:x, right: W - x - larg, top:22 },
+          styles:{ fontSize:7.6, cellPadding:1.1, lineColor:[150,156,175], lineWidth:0.2, textColor:[27,32,51], valign:'middle', halign:'center' },
+          headStyles:{ fillColor:[30,27,75], textColor:255, fontStyle:'bold', fontSize:7.2 },
+          alternateRowStyles:{ fillColor:[240,242,248] },
+          columnStyles:{ 0:{ cellWidth:6 }, 1:{ fontStyle:'bold', halign:'left' }, [c0-1]:{ cellWidth:12 },
+            [c0]:{ cellWidth:14, fontStyle:'bold', fillColor:[254,243,199], textColor:[120,53,15] }, [c0+1]:{ cellWidth:14, fontStyle:'bold', fillColor:[254,243,199], textColor:[120,53,15] },
+            [c0+2]:{ cellWidth:15 }, [c0+3]:{ cellWidth:15 } },
+          didParseCell: d => { if(d.section==='body' && d.cell.colSpan === 2){ d.cell.styles.textColor = [94,102,128]; d.cell.styles.fontStyle = 'italic'; } },
+          didDrawPage: d => { if(d.pageNumber > 1) cabecalho(); },
+        });
+        fim = Math.max(fim, doc.lastAutoTable.finalY);
+      });
+      y = fim + 5;
+    });
+  } else if(r.tipo==='lista'){
     r.grupos.forEach(gp=>{
       const comSetor = r.setor==='todos' && !gp.titulo;
       if(gp.titulo){
@@ -2391,7 +2430,7 @@ function pdfRelatorio(){
       y += 2;
     });
   }
-  const nome = r.tipo==='lista' ? 'lista-de-horarios.pdf' : r.tipo==='quadro' ? (r.lado ? 'quadro-de-horarios-turmas.pdf' : 'quadro-de-horarios.pdf') : ('escala-por-dia-' + r.de + (r.de!==r.ate ? '_a_' + r.ate : '') + '.pdf');
+  const nome = r.tipo==='lista' ? (r.lado ? 'lista-de-horarios-turmas.pdf' : 'lista-de-horarios.pdf') : r.tipo==='quadro' ? (r.lado ? 'quadro-de-horarios-turmas.pdf' : 'quadro-de-horarios.pdf') : ('escala-por-dia-' + r.de + (r.de!==r.ate ? '_a_' + r.ate : '') + '.pdf');
   doc.save(nome);
 }
 
