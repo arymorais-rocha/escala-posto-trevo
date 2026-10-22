@@ -222,6 +222,19 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .rel-tab td{padding:6px 8px;border-bottom:1px solid var(--rule);}
 .rel-tab tr:nth-child(even) td{background:#F6F7FB;}
 .rel-tab td.rel-h{font-weight:700;background:var(--amber-soft) !important;color:#78350F;white-space:nowrap;font-variant-numeric:tabular-nums;}
+body.travado > header, body.travado > main, body.travado #modal-root{display:none !important;}
+body:not(.travado) .trava{display:none;}
+.trava{min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:linear-gradient(160deg,var(--indigo-900),var(--indigo-950));}
+.trava-caixa{background:var(--surface);border-radius:16px;padding:28px 26px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 50px rgba(0,0,0,.35);}
+.trava-logo{width:52px;height:52px;border-radius:14px;background:var(--amber);display:grid;place-items:center;font-size:26px;}
+.trava-caixa h1{margin:6px 0 0;font-size:20px;color:var(--indigo-950);}
+.trava-caixa p{margin:0 0 6px;color:var(--ink-soft);font-size:13.5px;line-height:1.45;}
+.trava-caixa label{font-size:12px;font-weight:700;color:var(--ink-soft);}
+.trava-caixa input{padding:12px 13px;border:1px solid var(--rule);border-radius:10px;font-size:15px;background:#FAFBFD;width:100%;}
+.trava-caixa .btn{padding:12px;font-size:15px;margin-top:4px;}
+.trava-msg{font-size:13px;font-weight:600;color:var(--low);min-height:1em;}
+.trava-msg.info{color:var(--ink-soft);font-weight:500;}
+.trava-srv{font-size:12px;color:var(--ink-soft);} .trava-srv summary{cursor:pointer;} .trava-srv input{margin-top:6px;font-size:12px;padding:8px 10px;}
 .modal-actions{display:flex;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--rule);}
 .modal-actions div{display:flex;gap:8px;}
 
@@ -256,7 +269,22 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 }
 </style>
 </head>
-<body>
+<body class="travado">
+<div id="trava" class="trava">
+  <form id="trava-form" class="trava-caixa" autocomplete="on">
+    <div class="trava-logo">⛽</div>
+    <h1>Escala · Posto Trevo</h1>
+    <p>Painel de gestão. Digite a senha de administrador para entrar.</p>
+    <input type="text" name="username" value="administrador" autocomplete="username" hidden>
+    <label for="trava-senha">Senha</label>
+    <input id="trava-senha" type="password" required autocomplete="current-password" autofocus>
+    <div id="trava-msg" class="trava-msg" role="alert"></div>
+    <button type="submit" class="btn btn-amber" id="trava-btn">Entrar</button>
+    <details class="trava-srv"><summary>Endereço do servidor</summary>
+      <input id="trava-url" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+    </details>
+  </form>
+</div>
 
 <header class="topbar no-print">
   <div class="inner">
@@ -1754,15 +1782,20 @@ const NUVEM_KEY = 'escala-trevo-nuvem';
 const URL_SERVIDOR = 'https://script.google.com/macros/s/AKfycbzzPr5PBpuJ2PmRsoqnoCfJtZSJvuMS1iVuUHX4K41J-J1DXbS1fwpHrA2WGxg8aQp_/exec';
 let nuvem = { url:URL_SERVIDOR, token:'', versao:0, status:'off', msg:'' };
 let nuvemTimer = null, nuvemOcupada = false, nuvemPendente = false;
-try{ Object.assign(nuvem, JSON.parse(localStorage.getItem(NUVEM_KEY) || '{}')); }catch(e){}
-function guardarNuvem(){ try{ localStorage.setItem(NUVEM_KEY, JSON.stringify({ url:nuvem.url, token:nuvem.token, versao:nuvem.versao })); }catch(e){} }
+try{ const g = JSON.parse(localStorage.getItem(NUVEM_KEY) || '{}'); if(g.url) nuvem.url = g.url; if(g.versao) nuvem.versao = g.versao; }catch(e){}
+// a senha vale só enquanto a aba estiver aberta: fechou, pede de novo
+try{ nuvem.token = sessionStorage.getItem(NUVEM_KEY + '-sessao') || ''; }catch(e){}
+function guardarNuvem(){
+  try{ localStorage.setItem(NUVEM_KEY, JSON.stringify({ url:nuvem.url, versao:nuvem.versao })); }catch(e){}
+  try{ nuvem.token ? sessionStorage.setItem(NUVEM_KEY + '-sessao', nuvem.token) : sessionStorage.removeItem(NUVEM_KEY + '-sessao'); }catch(e){}
+}
 
 async function api(acao, dados){
   if(!nuvem.url) throw new Error('Informe o endereço do servidor.');
   const r = await fetch(nuvem.url, { method:'POST', body: JSON.stringify({ acao, token: nuvem.token, ...(dados||{}) }) });
   if(!r.ok) throw new Error('Servidor respondeu ' + r.status + '. Confira o endereço da implantação.');
   const j = await r.json();
-  if(j.sair){ nuvem.token = ''; guardarNuvem(); statusNuvem('off', 'Sessão encerrada. Entre de novo.'); }
+  if(j.sair){ nuvem.token = ''; guardarNuvem(); statusNuvem('off', 'Sessão encerrada. Entre de novo.'); travar('Sua sessão terminou. Digite a senha de novo.'); }
   return j;
 }
 
@@ -1847,7 +1880,7 @@ function abrirNuvem(msg, tipo){
       <button class="btn btn-light" id="nv-recarregar">Recarregar da nuvem</button>
       <button class="btn btn-light" id="nv-senha-admin">Trocar minha senha</button>
     </div>
-    <div class="modal-actions"><button class="btn btn-danger" id="nv-sair">Sair da nuvem</button><button class="btn btn-light" id="m-cancelar">Fechar</button></div>`);
+    <div class="modal-actions"><button class="btn btn-danger" id="nv-sair">Sair do painel</button><button class="btn btn-light" id="m-cancelar">Fechar</button></div>`);
 }
 
 async function entrarNuvem(ev){
@@ -2041,7 +2074,7 @@ async function trocarSenha(ev){
   const r = await api('trocarSenhaAdmin', { atual: document.getElementById('nv-atual').value, nova: document.getElementById('nv-nova').value });
   if(!r.ok){ aviso.className = 'nv-msg erro'; aviso.textContent = r.erro; return; }
   nuvem.token = ''; guardarNuvem(); statusNuvem('off');
-  abrirNuvem('Senha trocada. Entre de novo com a senha nova.', 'ok');
+  travar('Senha trocada. Entre com a senha nova.', 'info');
 }
 
 document.addEventListener('submit', ev=>{
@@ -2060,7 +2093,7 @@ document.addEventListener('click', async ev=>{
     if(el.id==='nv-acessos') return abrirAcessos();
     if(el.id==='nv-senha-admin') return abrirTrocaSenha();
     if(el.id==='nv-recarregar'){ await baixarNuvem(); return abrirNuvem('Escala recarregada da nuvem.', 'ok'); }
-    if(el.id==='nv-sair'){ nuvem.token = ''; guardarNuvem(); statusNuvem('off'); return abrirNuvem('Você saiu. A escala continua salva neste aparelho e na nuvem.'); }
+    if(el.id==='nv-sair'){ return sairPainel(); }
     if(el.dataset.pin) return gerarPinPara(Number(el.dataset.pin));
     if(el.dataset.ativar) return ativarAcesso(Number(el.dataset.ativar), el.dataset.valor==='1');
     if(el.dataset.despublicar){
@@ -2445,8 +2478,61 @@ document.addEventListener('click', ev=>{
 carregar();
 render();
 medirFixos();
-// ao abrir: se já estava conectado, pega a versão mais nova da nuvem
-if(nuvem.token){ statusNuvem('salvando'); baixarNuvem().catch(e=> statusNuvem('erro', e.message)); }
+// ---------- tela de senha do painel ----------
+const MIN_INATIVO = 30; // trava sozinho depois de 30 minutos sem mexer
+let ultimoUso = Date.now();
+function travar(msg, tipo){
+  document.body.classList.add('travado');
+  document.getElementById('modal-root').innerHTML = '';
+  document.getElementById('trava-url').value = nuvem.url || '';
+  const m = document.getElementById('trava-msg'); m.className = 'trava-msg ' + (tipo||''); m.textContent = msg || '';
+  const sn = document.getElementById('trava-senha'); sn.value = ''; setTimeout(()=> sn.focus(), 50);
+}
+function destravar(){
+  document.body.classList.remove('travado');
+  ultimoUso = Date.now();
+  render(); medirFixos();
+}
+function sairPainel(){
+  if(nuvem.status === 'salvando') enviarNuvem();
+  nuvem.token = ''; guardarNuvem(); statusNuvem('off');
+  travar('Você saiu do painel.', 'info');
+}
+document.getElementById('trava-form').addEventListener('submit', async ev=>{
+  ev.preventDefault();
+  const msg = document.getElementById('trava-msg'), btn = document.getElementById('trava-btn');
+  const url = document.getElementById('trava-url').value.trim(); if(url) nuvem.url = url;
+  msg.className = 'trava-msg info'; msg.textContent = 'Conferindo a senha…'; btn.disabled = true;
+  try{
+    const r = await api('loginAdmin', { senha: document.getElementById('trava-senha').value });
+    if(!r.ok){ msg.className = 'trava-msg'; msg.textContent = r.erro || 'Senha incorreta.'; return; }
+    nuvem.token = r.token; guardarNuvem();
+    msg.textContent = 'Carregando a escala…';
+    try{ await baixarNuvem(); }catch(e){ statusNuvem('erro', e.message); }
+    destravar();
+  }catch(e){
+    msg.className = 'trava-msg';
+    msg.textContent = 'Sem conexão com o servidor. Confira a internet e tente de novo.';
+  }finally{ btn.disabled = false; }
+});
+['click','keydown','scroll','touchstart','mousemove'].forEach(t=> document.addEventListener(t, ()=>{ ultimoUso = Date.now(); }, { passive:true }));
+setInterval(()=>{
+  if(!document.body.classList.contains('travado') && Date.now() - ultimoUso > MIN_INATIVO * 60000){
+    if(nuvem.status === 'salvando') enviarNuvem();
+    nuvem.token = ''; guardarNuvem(); statusNuvem('off');
+    travar('O painel foi travado depois de ' + MIN_INATIVO + ' minutos sem uso. Digite a senha de novo.', 'info');
+  }
+}, 30000);
+
+// ao abrir: com a aba ainda aberta desde o último acesso, entra direto; senão, pede a senha
+if(nuvem.token){
+  statusNuvem('salvando');
+  baixarNuvem().then(()=> destravar()).catch(e=>{
+    if(nuvem.token){ statusNuvem('erro', e.message); destravar(); } // sem internet: continua com a cópia deste aparelho
+  });
+} else {
+  travar();
+}
 </script>
 </body>
 </html>
