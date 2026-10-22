@@ -144,6 +144,11 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .explica{border-top:1px solid var(--rule);padding-top:10px;}
 .explica summary{font-size:12.5px;color:var(--indigo-700);}
 .explica[open]{display:flex;flex-direction:column;gap:10px;}
+.config12 > summary{cursor:pointer;font-weight:700;color:var(--ink);font-size:13.5px;list-style:none;display:flex;align-items:center;gap:8px;}
+.config12 > summary::-webkit-details-marker{display:none;}
+.config12 > summary::before{content:'▸';color:var(--indigo-700);transition:transform .15s;}
+.config12[open] > summary::before{transform:rotate(90deg);}
+.config12-corpo{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
 .dz-linha{display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
 .rules ul{margin:0;padding-left:18px;}
 .rules b{color:var(--ink);}
@@ -978,8 +983,11 @@ function render12Painel(){
   const linha = setor => `${SETORES[setor]}: dia ${conta(setor,'dia')} pessoas (${par(setor,'dia')}) · noite ${conta(setor,'noite')} pessoas (${par(setor,'noite')})`;
   const nManual = Object.keys(cfg.manual||{}).length;
   const desequilibrio = ['pista','caixas'].some(st=> ['dia','noite'].some(t=> Math.abs(conta(st,t,'A') - conta(st,t,'B')) > 1));
+  const avisosHorario = ['pista','caixas'].map(st=>{ const a = checarHorario12(st); return a ? (st==='pista' ? 'Pista: ' : 'Caixas: ') + a : ''; }).filter(Boolean);
   box.innerHTML = `
-    <h3>Escala 12x36</h3>
+    <details class="config12" id="dz-config" ${ui.configAberta ? 'open' : ''}>
+    <summary>Configurações da escala 12x36</summary>
+    <div class="config12-corpo">
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-soft);">
       <label for="dz-noite-pista">Frentistas na noite</label>
       <input type="number" min="0" step="2" id="dz-noite-pista" value="${cfg.posNoite.pista*2}" style="width:56px;border:1px solid var(--rule);border-radius:6px;padding:5px 7px;">
@@ -1015,7 +1023,10 @@ function render12Painel(){
     <div class="fds">Cada um trabalha 12 horas e descansa no dia seguinte (dia sim, dia não). A turma A trabalha num dia e a B no outro, então cada posto precisa de 2 pessoas no dia e 2 na noite. Vão pra noite os de turno mais tarde; para trocar alguém de turno ou de turma, clique no nome. Cada um folga um domingo a cada 2 semanas.</div>
     <div class="fds"><b>Intervalo indenizado:</b> o intervalo é pago, sem parar o trabalho (a lei permite no 12x36). Aí o plantão fica com 12 horas no posto.</div>
     <div class="fds"><b>Antes de adotar:</b> com a EC 141/2026, escala diferente da 5x2 precisa estar em acordo ou convenção coletiva. A média é de 42 horas por semana (cerca de 38,5h se a hora de intervalo for descontada).</div>
-    </details>`;
+    </details>
+    </div>
+    </details>
+    ${!ui.configAberta && (desequilibrio || avisosHorario.length) ? `<div class="fds"><span class="erro">${desequilibrio ? 'Turmas desequilibradas: um dos dias fica com menos gente. ' : ''}${avisosHorario.map(esc).join(' ')}</span> Abra as configurações para ajustar.</div>` : ''}`;
 }
 
 // Quem está trabalhando num período: os do próprio turno com T, e na noite também quem está cobrindo (N).
@@ -1665,7 +1676,12 @@ document.addEventListener('change', ev=>{
     salvar(); render();
   }
 });
-document.addEventListener('toggle', ev=>{ if(ev.target && ev.target.id==='dz-explica') ui.explicaAberta = ev.target.open; }, true);
+document.addEventListener('toggle', ev=>{
+  if(!ev.target) return;
+  if(ev.target.id==='dz-explica') ui.explicaAberta = ev.target.open;
+  // só redesenha se o estado mudou (o próprio redesenho dispara este evento de novo)
+  if(ev.target.id==='dz-config' && ui.configAberta !== ev.target.open){ ui.configAberta = ev.target.open; render12Painel(); }
+}, true);
 document.getElementById('f-busca').addEventListener('input', ev=>{ ui.busca = ev.target.value; render(); });
 document.addEventListener('input', ev=>{ if(ev.target && ev.target.id==='m-ent') completarSaida12(); });
 
