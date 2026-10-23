@@ -170,6 +170,8 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .config12 > summary::before{content:'▸';color:var(--indigo-700);transition:transform .15s;}
 .config12[open] > summary::before{transform:rotate(90deg);}
 .config12-corpo{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
+.bloco40{border:2px solid #C7D2FE;background:#F5F7FF;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;}
+.bloco40 select{border:1px solid var(--rule);border-radius:6px;padding:4px 6px;margin-left:4px;background:#fff;}
 .dz-linha{display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
 .rules ul{margin:0;padding-left:18px;}
 .rules b{color:var(--ink);}
@@ -329,10 +331,11 @@ body:not(.travado) .trava{display:none;}
         <option value="90">1h30</option>
         <option value="120">2 horas</option>
       </select>
-      <label for="f-modelo">Modelo de escala</label>
+      <label for="f-modelo">Escala</label>
       <select id="f-modelo" style="border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;font-weight:600;">
+        <option value="12x36">12x36 · 42h (atual)</option>
+        <option value="12x36-40">12x36 · 40h (a partir de dez/2027)</option>
         <option value="5x2">5x2</option>
-        <option value="12x36">12x36</option>
       </select>
       <label for="f-modo" id="lbl-modo">Folgas da pista</label>
       <select id="f-modo" style="border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:13px;background:#FAFBFD;max-width:260px;">
@@ -497,7 +500,24 @@ const HORARIOS12 = {
 };
 const DOZE_PADRAO = { horarios:{ pista:{dia:'06:00', noite:'18:00'}, caixas:{dia:'06:00', noite:'18:00'} }, posNoite:{ pista:1, caixas:1 }, manual:{}, noite1:true };
 const MINIMOS12_PADRAO = { pista:{ dia:6, noite:1 }, caixas:{ dia:1, noite:1 } };
-function modelo12(){ return state.modelo === '12x36'; }
+// 12x36 tem duas versões: a atual (12h trabalhadas, 42h/semana) e a de 40h/semana (intervalos maiores)
+function modelo12(){ return state.modelo === '12x36' || state.modelo === '12x36-40'; }
+function modelo40(){ return state.modelo === '12x36-40'; }
+function nomeModelo(m){ m = m || state.modelo; return m === '12x36-40' ? '12x36 · 40h' : m === '12x36' ? '12x36 · 42h' : '5x2'; }
+// Escala de 40h: 11h25 trabalhadas por plantão (3,5 plantões × 11h25 = 39,96h por semana)
+const TRAB40 = 685;
+const CFG40_PADRAO = { pista: 95, caixas: 60 }; // intervalo em minutos: pista 1h35 (13h no posto), caixas 1h (12h25 no posto)
+function cfg40(){ return state.cfg40 || (state.cfg40 = { ...CFG40_PADRAO }); }
+// opção de cada setor: número = intervalo com 11h25 trabalhadas; '12h-60' / '12h-35' = 12h no posto com 1h ou 35 min de intervalo
+function opc40(setor){
+  const v = String(cfg40()[setor] ?? CFG40_PADRAO[setor]);
+  const m = v.match(/^12h-(\d+)$/);
+  if(m){ const int = Number(m[1]) === 35 ? 35 : 60; return { int, span: 720, curto: int < 60 }; }
+  const int = Math.min(120, Math.max(60, Number(v) || CFG40_PADRAO[setor]));
+  return { int, span: TRAB40 + int, curto: false };
+}
+function intervalo40(setor){ return opc40(setor).int; }
+function trab40(setor){ const o = opc40(setor); return o.span - o.int; }
 function cfg12(){
   const cfg = state.doze || (state.doze = JSON.parse(JSON.stringify(DOZE_PADRAO)));
   // regra nova: 1 funcionário por noite em cada setor (escalas salvas antes tinham 3 frentistas)
@@ -528,8 +548,10 @@ function intervalo12Min(){ return cfg12().intervaloIndenizado ? 0 : Math.min(120
 // Os caixas no 12x36 não têm intervalo: plantão de 12 horas certas
 const CAIXA_SEM_INTERVALO = true;
 // (a noite da pista tem intervalo normalmente; só os caixas trabalham 12h corridas)
-function semIntervalo12(setor, turno){ return CAIXA_SEM_INTERVALO && setor === 'caixas'; }
-function span12(setor, turno){ return 720 + (semIntervalo12(setor, turno) ? 0 : intervalo12Min()); }
+function semIntervalo12(setor, turno){ return !modelo40() && CAIXA_SEM_INTERVALO && setor === 'caixas'; }
+// permanência no posto da escala 12x36 de 42h (usada também para guardar o horário próprio de cada um)
+function span42(setor){ return 720 + ((CAIXA_SEM_INTERVALO && setor === 'caixas') ? 0 : intervalo12Min()); }
+function span12(setor, turno){ return modelo40() ? opc40(setor).span : span42(setor); }
 const faixa = (ini, setor, turno) => ini + ' às ' + hhmm(minutos(ini) + span12(setor, turno));
 // entrada à tarde/noite (15h às 3h) = plantão da noite
 const turnoPelaEntrada = ent => { const h = horaEntrada(ent); return (h >= 15 || h < 4) ? 'noite' : 'dia'; };
@@ -610,7 +632,8 @@ function gerar12(g){
 // No 12x36 vale o horário próprio dele (se tiver) ou o do setor para o turno dele (dia ou noite).
 function horarioDe(e, d12){
   if(modelo12()){
-    if(e.h12 && e.h12.ini && e.h12.fim) return e.h12.ini + ' às ' + e.h12.fim;
+    // na escala de 40h vale a mesma entrada, e a saída é recalculada (11h25 + intervalo)
+    if(e.h12 && e.h12.ini && e.h12.fim) return modelo40() ? faixa(e.h12.ini, e.setor) : e.h12.ini + ' às ' + e.h12.fim;
     const info = (d12 || distribuicao12())[e.id];
     return horario12(e.setor)[info ? info.turno : 'dia'];
   }
@@ -622,7 +645,7 @@ const partesTurno = turno => { const m = /(\d{2}:\d{2}).*?(\d{2}:\d{2})/.exec(tu
 // Jornada acima de 6h: mínimo 1h e máximo 2h. De 4h a 6h: 15 minutos. Até 4h: sem intervalo obrigatório.
 // O intervalo automático fica entre 2h depois da entrada e 1h antes da saída, e quem tem o mesmo
 // horário sai em horas diferentes, pra não esvaziar a pista.
-const chaveModelo = () => modelo12() ? '12x36' : '5x2';
+const chaveModelo = () => modelo12() ? state.modelo : '5x2';
 const duracaoTurnoMin = horario => { const [a,b] = partesTurno(horario); return mod(minutos(b) - minutos(a), 1440) || 1440; };
 function intervaloMinimo(durTurno){ return durTurno > 360 ? 60 : durTurno > 240 ? 15 : 0; }
 function duracaoIntervalo(durTurno){
@@ -639,7 +662,7 @@ function intervalosAuto(d12){
   Object.values(grupos).forEach(lista=>{
     lista.sort((a,b)=> a.nome.localeCompare(b.nome));
     const h = horarioDe(lista[0], d12), ini = minutos(partesTurno(h)[0]);
-    const dt = duracaoTurnoMin(h), dur = duracaoIntervalo(dt);
+    const dt = duracaoTurnoMin(h), dur = modelo40() ? intervalo40(lista[0].setor) : duracaoIntervalo(dt);
     if(!dur) return;
     let ja = dt > 360 ? 120 : Math.round((dt - dur) / 2);     // começo da janela (minutos depois da entrada)
     let ate = dt > 360 ? dt - 60 - dur : ja;                    // último começo possível
@@ -655,7 +678,7 @@ function intervalosAuto(d12){
 // intervalo de um funcionário no modelo aberto: o escolhido à mão ou o automático
 function intervaloDe(e, d12, autoMap){
   if(modelo12() && semIntervalo12(e.setor, (d12 || distribuicao12())[e.id] ? (d12 || distribuicao12())[e.id].turno : 'dia')) return { indenizado:true, semIntervalo:true, texto:'Sem intervalo' };
-  if(modelo12() && cfg12().intervaloIndenizado) return { indenizado:true, texto:'Intervalo indenizado' };
+  if(modelo12() && !modelo40() && cfg12().intervaloIndenizado) return { indenizado:true, texto:'Intervalo indenizado' };
   const manual = e.intervalos && e.intervalos[chaveModelo()];
   if(manual && manual.ini && manual.fim) return { ...manual, auto:false, texto: manual.ini + '-' + manual.fim };
   const a = (autoMap || intervalosAuto(d12))[e.id];
@@ -670,7 +693,8 @@ function avisosIntervalo(e, d12){
   const av = [];
   const dur = mod(minutos(it.fim) - minutos(it.ini), 1440);
   const desdeEntrada = mod(minutos(it.ini) - minutos(partesTurno(h)[0]), 1440);
-  if(min && dur < min) av.push(`Intervalo de ${dur} min, abaixo do mínimo de ${min===60?'1 hora':'15 minutos'}`);
+  const curto40 = modelo40() && opc40(e.setor).curto && dur >= 30;   // 35 min por convenção: aviso único no quadro da escala de 40h
+  if(min && dur < min && !curto40) av.push(`Intervalo de ${dur} min, abaixo do mínimo de ${min===60?'1 hora':'15 minutos'}`);
   if(dt > 360 && dur > 120) av.push(`Intervalo de ${String(dur/60).replace('.', ',')}h passa de 2 horas (só com acordo ou convenção)`);
   if(desdeEntrada === 0 || desdeEntrada + dur >= dt) av.push(`Intervalo ${it.texto} fora do horário de trabalho (${h})`);
   return av;
@@ -766,7 +790,7 @@ function aplicarPadroes(){
   }
   // o posto passou a usar a 12x36: abre nela e esconde a 5x2 (dá pra mostrar de novo no painel do 12x36)
   if(state.ocultar5x2 === undefined){ state.ocultar5x2 = true; state.modelo = '12x36'; }
-  if(state.ocultar5x2) state.modelo = '12x36';
+  if(state.ocultar5x2 && !modelo12()) state.modelo = '12x36';
 }
 function coberturaPadrao(){
   const out = { pista:null, caixas:null };
@@ -946,7 +970,9 @@ function conferir(e, g){
     const h = horarioDe(e), dt = duracaoTurnoMin(h), it = intervaloDe(e);
     const pausa = it && !it.indenizado ? mod(minutos(it.fim) - minutos(it.ini), 1440) : 0;
     const trab = dt - pausa;
-    if(trab > 720) avisos.push(`${String(trab/60).replace('.', ',')}h trabalhadas no plantão (${h}); o 12x36 é de 12h`);
+    const limite = modelo40() ? trab40(e.setor) : 720;
+    const hm = m => Math.floor(m/60) + 'h' + (m%60 ? String(m%60).padStart(2,'0') : '');
+    if(trab > limite + 1) avisos.push(`${hm(trab)} trabalhadas no plantão (${h}); ${modelo40() ? 'na escala de 40h o máximo é 11h25 (aumente o intervalo)' : 'o 12x36 é de 12h'}`);
   }
   let domF = 0, domTotal = 0, domV = 0;
   for(let t = g.first; t <= g.last; t += DAY){
@@ -1050,6 +1076,31 @@ function avisos12(){
   return out;
 }
 
+// Bloco da escala de 40h: intervalos de cada setor e a conta de horas
+function bloco40(){
+  const hm = m => Math.floor(m/60) + 'h' + (m%60 ? String(m%60).padStart(2,'0') : '');
+  const linha = setor => {
+    const o = opc40(setor), t = o.span - o.int, sem = (t * 3.5 / 60).toFixed(2).replace('.', ',');
+    const hmi = m => m < 60 ? m + ' min' : hm(m);
+    return `<b>${setor==='pista' ? 'Pista' : 'Caixas'}:</b> ${hm(o.span)} no posto − ${hmi(o.int)} de intervalo = <b>${hm(t)} trabalhadas</b> · média de <b>${sem}h por semana</b>`
+      + (o.curto ? ` <span style="color:#B45309;">⚠ intervalo menor que 1h só vale se a convenção coletiva permitir (mínimo 30 min)</span>` : '');
+  };
+  const atual = setor => { const o = opc40(setor); return o.span === 720 ? '12h-' + o.int : String(o.int); };
+  const op = (setor, lista) => lista.map(m=>{
+    const v = String(m), rot = v.startsWith('12h-') ? (v === '12h-60' ? '12h · intervalo 1h' : '12h · intervalo 35 min') : hm(m) + ' (11h25 trab.)';
+    return `<option value="${v}" ${atual(setor)===v?'selected':''}>${rot}</option>`;
+  }).join('');
+  return `<div class="bloco40">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;">
+      <b style="color:var(--indigo-950);">Escala de 40 horas semanais</b>
+      <label>Intervalo da pista <select id="dz40-pista">${op('pista', [95, 105, 120, '12h-60', '12h-35'])}</select></label>
+      <label>Intervalo dos caixas <select id="dz40-caixas">${op('caixas', [60, 75, 95, 120, '12h-60', '12h-35'])}</select></label>
+    </div>
+    <div class="fds">${linha('pista')}<br>${linha('caixas')}</div>
+    <div class="fds">Os horários de entrada, as turmas e quem fica na noite são os mesmos da escala de 42h. Todos passam a ter intervalo de verdade, inclusive os caixas e a noite: com uma pessoa só no turno, alguém precisa cobrir o caixa ou a pista nesse horário.</div>
+  </div>`;
+}
+
 // Painel do 12x36 (aparece nas duas abas quando o modelo 12x36 está escolhido)
 function render12Painel(){
   const box = document.getElementById('doze');
@@ -1064,8 +1115,9 @@ function render12Painel(){
   const avisosHorario = ['pista','caixas'].map(st=>{ const a = checarHorario12(st); return a ? (st==='pista' ? 'Pista: ' : 'Caixas: ') + a : ''; }).filter(Boolean);
   box.innerHTML = `
     <details class="config12" id="dz-config" ${ui.configAberta ? 'open' : ''}>
-    <summary>Configurações da escala 12x36</summary>
+    <summary>Configurações da escala ${nomeModelo()}</summary>
     <div class="config12-corpo">
+    ${modelo40() ? bloco40() : ''}
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-soft);">
       <label for="dz-noite-pista">Frentistas na noite</label>
       <input type="number" min="0" step="2" id="dz-noite-pista" value="${cfg.posNoite.pista*2}" style="width:56px;border:1px solid var(--rule);border-radius:6px;padding:5px 7px;">
@@ -1090,7 +1142,7 @@ function render12Painel(){
       ${state.ocultar5x2
         ? '<button type="button" class="btn btn-light" id="dz-5x2" style="padding:5px 10px;font-size:12px;">Mostrar escala 5x2</button>'
         : '<button type="button" class="btn btn-light" id="dz-5x2" style="padding:5px 10px;font-size:12px;">Ocultar escala 5x2</button>'}
-      <label class="check" style="font-size:12.5px;"><input type="checkbox" id="dz-indenizado" ${cfg.intervaloIndenizado?'checked':''}> Intervalo indenizado</label>
+      ${modelo40() ? '' : `<label class="check" style="font-size:12.5px;"><input type="checkbox" id="dz-indenizado" ${cfg.intervaloIndenizado?'checked':''}> Intervalo indenizado</label>`}
     </div>
     <details class="explica" id="dz-explica" ${ui.explicaAberta ? 'open' : ''}>
     <summary>Ver explicações</summary>
@@ -1134,8 +1186,9 @@ function render(){
   selModo.value = rodizioAtivo() ? 'rodizio4' : 'equilibrado';
   selModo.hidden = document.getElementById('lbl-modo').hidden = ui.setor !== 'pista' || modelo12();
   selCobre.hidden = document.querySelector('label[for="f-cobre"]').hidden = modelo12();
-  document.getElementById('f-modelo').value = modelo12() ? '12x36' : '5x2';
-  document.getElementById('f-modelo').hidden = document.querySelector('label[for="f-modelo"]').hidden = !!state.ocultar5x2;
+  const selM = document.getElementById('f-modelo');
+  selM.querySelector('option[value="5x2"]').hidden = selM.querySelector('option[value="5x2"]').disabled = !!state.ocultar5x2;
+  selM.value = state.modelo || '12x36';
   document.getElementById('f-int').value = String(Number(state.intervaloMin) || 60);
   render12Painel();
   const fasesTela = fasesRodizio();
@@ -1151,8 +1204,8 @@ function render(){
   document.getElementById('n-caixas').textContent = state.employees.filter(e=>e.setor==='caixas').length;
   document.querySelectorAll('.tabs button').forEach(b=> b.classList.toggle('on', b.dataset.tab===ui.setor));
   document.getElementById('f-mes').value = ui.mes;
-  document.getElementById('sheet-title').textContent = SETORES[ui.setor] + ' · ' + nomeMes(ui.mes) + (modelo12() ? ' · 12x36' : ' · 5x2');
-  document.getElementById('print-titulo').textContent = 'POSTO TREVO · ESCALA DE TRABALHO ' + (modelo12() ? '12x36' : '5x2');
+  document.getElementById('sheet-title').textContent = SETORES[ui.setor] + ' · ' + nomeMes(ui.mes) + ' · ' + nomeModelo();
+  document.getElementById('print-titulo').textContent = 'POSTO TREVO · ESCALA DE TRABALHO ' + nomeModelo();
   document.getElementById('print-sub').textContent = SETORES[ui.setor] + ' · ' + nomeMes(ui.mes) + ' · T = trabalha, F = folga';
   document.getElementById('print-date').textContent = 'Gerado em ' + new Date().toLocaleDateString('pt-BR');
 
@@ -1305,7 +1358,7 @@ function abrirModal(id){
             : `Em branco, o app escolhe sozinho${intAuto ? ` (hoje: <b>${esc(intAuto.ini)} às ${esc(intAuto.fim)}</b>)` : ''}. Ao escolher o início, o fim é preenchido com a duração padrão.`}
         </div>
         <div class="hint" style="font-size:11.5px;color:var(--ink-soft);margin-top:-6px;line-height:1.45;">
-          Este horário vale para a escala <b>${modelo12() ? '12x36' : '5x2'}</b>, que está aberta agora.${modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha: caixas 12 horas depois (sem intervalo); pista ${String(span12('pista','dia')/60).replace('.', ',')} horas depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
+          Este horário vale para a escala <b>${nomeModelo()}</b>, que está aberta agora.${modelo40() ? ' Na escala de 40h só a entrada conta: a saída é calculada (11h25 trabalhadas + intervalo).' : modelo12() ? ` Ao escolher a entrada, a saída é preenchida sozinha: caixas 12 horas depois (sem intervalo); pista ${String(span12('pista','dia')/60).replace('.', ',')} horas depois (12h trabalhadas${intervalo12Min() ? ' + intervalo' : ''}).` : ''}
           ${e ? (modelo12() ? `No 5x2 ele continua ${esc(e.turno)}.` : `No 12x36: ${e.h12 ? esc(e.h12.ini + ' às ' + e.h12.fim) : 'horário do setor'}.`) : ''}
         </div>
         <div class="field"><label for="m-domingo">Grupo de domingo</label>
@@ -1364,7 +1417,7 @@ function salvarModal(ev){
     if(digitado === padrao.dia){ h12 = null; turno12auto = 'dia'; }
     else if(digitado === padrao.noite){ h12 = null; turno12auto = 'noite'; }
     else {
-      h12 = { ini:ent, fim:sai };
+      h12 = { ini:ent, fim: modelo40() ? hhmm(minutos(ent) + span42(setor)) : sai };
       const h = horaEntrada(ent);
       turno12auto = (h >= 15 || h < 4) ? 'noite' : 'dia'; // entrada à tarde/noite = plantão da noite
     }
@@ -1519,7 +1572,7 @@ function exportarPdf(meses, setores){
       
 
       doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,27,75);
-      doc.text('POSTO TREVO · ESCALA DE TRABALHO ' + (modelo12() ? '12x36' : '5x2'), 8, 11);
+      doc.text('POSTO TREVO · ESCALA DE TRABALHO ' + nomeModelo(), 8, 11);
       doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(27,32,51);
       const titulo = SETORES[setor] + ' · ' + nomeMes(mes);
       doc.text(titulo.charAt(0).toUpperCase() + titulo.slice(1), 8, 17);
@@ -1675,7 +1728,7 @@ document.addEventListener('click', ev=>{
     case 'btn-pdf': abrirModalPdf(); break;
     case 'dz-5x2':
       state.ocultar5x2 = !state.ocultar5x2;
-      if(state.ocultar5x2) state.modelo = '12x36';
+      if(state.ocultar5x2 && !modelo12()) state.modelo = '12x36';
       salvar(); render(); break;
     case 'dz-auto':
       if(!confirm('Desfazer as trocas de turno e turma feitas à mão no 12x36?')) break;
@@ -1715,11 +1768,12 @@ document.addEventListener('change', ev=>{
   if(el.id==='m-int-ini' && el.value){
     // fim = início + duração do intervalo para a jornada digitada
     const dt = mod(minutos(document.getElementById('m-sai').value) - minutos(document.getElementById('m-ent').value), 1440) || 1440;
-    const dur = duracaoIntervalo(dt) || 60;
+    const dur = modelo40() ? intervalo40(document.getElementById('m-setor').value) : (duracaoIntervalo(dt) || 60);
     document.getElementById('m-int-fim').value = hhmm(minutos(el.value.slice(0,5)) + dur);
     return;
   }
   if(el.id==='f-int'){ state.intervaloMin = Number(el.value) || 60; salvar(); render(); return; }
+  if(el.id==='dz40-pista' || el.id==='dz40-caixas'){ cfg40()[el.id.slice(5)] = /^12h-/.test(el.value) ? el.value : Number(el.value); salvar(); render(); return; }
   if(el.id==='dz-indenizado'){ cfg12().intervaloIndenizado = el.checked; salvar(); render(); return; }
   if(el.id==='m-atalho' && el.value){
     const [a, b] = partesTurno(el.value);
@@ -1933,7 +1987,7 @@ function montarPublicacao(mes){
       dias.push({ d: new Date(t).getUTCDate(), w: dow(t), ...d });
     }
     lista.push({
-      id: e.id, nome: e.nome, setor: e.setor, mes, modelo: modelo12() ? '12x36' : '5x2',
+      id: e.id, nome: e.nome, setor: e.setor, mes, modelo: nomeModelo(),
       horario: horarioDe(e, d12), intervalo: it ? (it.indenizado ? it.texto : it.ini + ' às ' + it.fim) : '',
       info: infoEscala(e, d12, mes), domingosFolga: conferir(e, g).domF, dias,
       geradoEm: new Date().toISOString()
@@ -1954,7 +2008,7 @@ async function abrirPublicar(){
   const opcoesQtd = [12, 6, 3, 2, 1].map(n=>`<option value="${n}">${n===12 ? '12 meses (o ano todo)' : n===1 ? 'Só este mês' : n + ' meses'}</option>`).join('');
   modalNuvem(`
     <form id="nv-pub-form" style="display:flex;flex-direction:column;gap:12px;padding:0;">
-      <div class="nv-msg">Publique a partir de um mês e o app já deixa os <b>12 meses seguintes</b> publicados. A equipe vê só <b>o mês atual e o próximo</b>; na virada do mês, o seguinte aparece sozinho. Se mudar algo na escala (novo colaborador, troca de turma), publique de novo: os meses são substituídos pela versão nova. Escala publicada: <b>${modelo12() ? '12x36' : '5x2'}</b>.</div>
+      <div class="nv-msg">Publique a partir de um mês e o app já deixa os <b>12 meses seguintes</b> publicados. A equipe vê só <b>o mês atual e o próximo</b>; na virada do mês, o seguinte aparece sozinho. Se mudar algo na escala (novo colaborador, troca de turma), publique de novo: os meses são substituídos pela versão nova. Escala publicada: <b>${nomeModelo()}</b>.</div>
       <div class="row2">
         <div class="field"><label for="nv-de">A partir do mês</label><input type="month" id="nv-de" required value="${ui.mes}"></div>
         <div class="field"><label for="nv-qtd">Quantos meses</label><select id="nv-qtd">${opcoesQtd}</select></div>
@@ -1988,7 +2042,7 @@ async function publicarMeses(ev){
   const problemas = [];
   meses.forEach(m=>{ const g = gerar(m); state.employees.forEach(e=>{ if(conferir(e, g).avisos.length) problemas.push(e.nome.split(' ')[0] + ' (' + nomeMes(m) + ')'); }); });
   if(problemas.length && !confirm('Há regras descumpridas para: ' + [...new Set(problemas)].slice(0,8).join(', ') + (problemas.length>8?'…':'') + '.\n\nPublicar mesmo assim?')){ aviso.textContent = ''; return; }
-  const modelo = modelo12() ? '12x36' : '5x2';
+  const modelo = nomeModelo();
   try{
     aviso.className = 'nv-msg'; aviso.textContent = 'Publicando ' + meses.length + ' mes' + (meses.length>1?'es':'') + '…';
     const lote = meses.map(m => ({ mes: m, colaboradores: montarPublicacao(m) }));
@@ -2281,7 +2335,7 @@ function abrirRelatorios(){
             ${modelo12() ? `<label class="check"><input type="checkbox" id="rel-lado" ${ui.relLado !== false ? 'checked' : ''}> Turma A e Turma B lado a lado</label>` : ''}
           </div>
         </div>
-        <div class="nv-msg">Escala usada: <b>${modelo12() ? '12x36' : '5x2'}</b> (a que está aberta agora).</div>
+        <div class="nv-msg">Escala usada: <b>${nomeModelo()}</b> (a que está aberta agora).</div>
         <div class="modal-actions">
           <span></span>
           <div><button type="submit" class="btn btn-dark">Ver na tela</button> <button type="button" class="btn btn-amber" id="rel-pdf">Gerar PDF</button></div>
@@ -2316,7 +2370,7 @@ function pdfRelatorio(){
   const doc = new jsPDF({ orientation: r.lado ? 'landscape' : 'portrait', unit:'mm', format:'a4' });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const titulo = (r.tipo==='lista' ? 'LISTA DE HORÁRIOS' : r.tipo==='quadro' ? 'QUADRO DE HORÁRIOS' : 'ESCALA POR DIA') + (r.lado ? ' · TURMA A E TURMA B' : '');
-  const sub = (r.setor==='todos' ? 'Pista e caixas' : SETORES[r.setor]) + ' · escala ' + (modelo12() ? '12x36' : '5x2') + ' · ordenado por ' + ORDENS[r.ordem].toLowerCase()
+  const sub = (r.setor==='todos' ? 'Pista e caixas' : SETORES[r.setor]) + ' · escala ' + nomeModelo() + ' · ordenado por ' + ORDENS[r.ordem].toLowerCase()
     + (r.tipo==='dias' ? ' · ' + ddmm(fromIso(r.de)) + (r.de!==r.ate ? ' a ' + ddmm(fromIso(r.ate)) : '') : '');
   const cabecalho = () => {
     doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,27,75);
