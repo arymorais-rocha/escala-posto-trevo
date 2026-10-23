@@ -204,6 +204,13 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .nv-msg.erro{color:var(--low);font-weight:600;} .nv-msg.ok{color:#166534;font-weight:600;}
 .rel-saida{display:flex;flex-direction:column;gap:14px;max-height:55vh;overflow:auto;border-top:1px solid var(--rule);padding-top:12px;}
 .rel-saida:empty{display:none;}
+.rel-tela{position:fixed;inset:0;z-index:80;background:#fff;display:flex;flex-direction:column;}
+.rel-tela-top{background:var(--indigo-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.rel-tela-top h3{margin:0;font-size:15px;flex:1;min-width:180px;}
+.rel-tela-top small{display:block;font-weight:400;color:#C7CBF0;font-size:12px;margin-top:2px;}
+.rel-tela-corpo{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+#rel-tela-fechar{background:#fff;color:var(--indigo-900);}
+
 .rel-folga{color:var(--folga-ink);font-weight:700;}
 .rel-lista td{text-align:center;} .rel-lista td:nth-child(2){text-align:left;}
 .rel-lista td.rel-i{font-weight:700;font-variant-numeric:tabular-nums;}
@@ -2363,6 +2370,30 @@ function verRelatorio(){
   relUltimo = lerRelForm();
   document.getElementById('rel-saida').innerHTML = htmlRelatorio(relUltimo);
 }
+// "Ver na tela": abre o relatório ocupando a tela inteira
+function abrirRelTela(){
+  verRelatorio();
+  const r = relUltimo;
+  const titulo = (r.tipo==='lista' ? 'Lista de horários' : r.tipo==='quadro' ? 'Quadro de horários' : 'Escala por dia') + (r.lado ? ' · Turma A e Turma B' : '');
+  const sub = (r.setor==='todos' ? 'Pista e caixas' : SETORES[r.setor]) + ' · escala ' + nomeModelo() + ' · ordenado por ' + ORDENS[r.ordem].toLowerCase()
+    + (r.tipo==='dias' ? ' · ' + ddmm(fromIso(r.de)) + (r.de!==r.ate ? ' a ' + ddmm(fromIso(r.ate)) : '') : '');
+  fecharRelTela();
+  const d = document.createElement('div');
+  d.className = 'rel-tela'; d.id = 'rel-tela'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true');
+  d.innerHTML = `<div class="rel-tela-top"><h3>Posto Trevo · ${esc(titulo)}<small>${esc(sub)}</small></h3>
+      <button type="button" class="btn btn-amber" id="rel-tela-pdf">Gerar PDF</button>
+      <button type="button" class="btn" id="rel-tela-fechar">✕ Fechar</button></div>
+    <div class="rel-tela-corpo">${htmlRelatorio(r)}</div>`;
+  document.getElementById('modal-root').appendChild(d);
+  try { if(d.requestFullscreen) d.requestFullscreen().catch(()=>{}); } catch(_){}
+}
+function fecharRelTela(){
+  const d = document.getElementById('rel-tela'); if(!d) return;
+  try { if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); } catch(_){}
+  d.remove();
+}
+document.addEventListener('fullscreenchange', ()=>{ if(!document.fullscreenElement && document.getElementById('rel-tela')) document.getElementById('rel-tela').remove(); });
+document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && document.getElementById('rel-tela')){ ev.stopImmediatePropagation(); fecharRelTela(); } }, true);
 
 function pdfRelatorio(){
   const r = relUltimo || lerRelForm();
@@ -2521,12 +2552,14 @@ function pdfRelatorio(){
   doc.save(nome);
 }
 
-document.addEventListener('submit', ev=>{ if(ev.target.id==='rel-form'){ ev.preventDefault(); verRelatorio(); } });
+document.addEventListener('submit', ev=>{ if(ev.target.id==='rel-form'){ ev.preventDefault(); abrirRelTela(); } });
 document.addEventListener('change', ev=>{ if(ev.target.id && ev.target.id.startsWith('rel-')) verRelatorio(); });
 document.addEventListener('click', ev=>{
   const b = ev.target.closest('button'); if(!b) return;
   if(b.id==='btn-rel') abrirRelatorios();
   if(b.id==='rel-pdf'){ verRelatorio(); pdfRelatorio(); }
+  if(b.id==='rel-tela-pdf') pdfRelatorio();
+  if(b.id==='rel-tela-fechar') fecharRelTela();
 });
 
 carregar();
