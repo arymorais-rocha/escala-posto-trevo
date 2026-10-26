@@ -204,6 +204,40 @@ tfoot .lbl{display:flex;align-items:center;justify-content:space-between;gap:6px
 .nv-msg.erro{color:var(--low);font-weight:600;} .nv-msg.ok{color:#166534;font-weight:600;}
 .rel-saida{display:flex;flex-direction:column;gap:14px;max-height:55vh;overflow:auto;border-top:1px solid var(--rule);padding-top:12px;}
 .rel-saida:empty{display:none;}
+/* ---------- dashboard ---------- */
+.dash-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.dash-filtros input,.dash-filtros select{border:1px solid #6366F1;border-radius:7px;padding:6px 8px;font:inherit;font-size:13px;background:#fff;color:var(--ink);}
+.dash-filtros .nav{background:#fff;color:var(--indigo-900);border:none;border-radius:7px;padding:6px 10px;font-weight:700;cursor:pointer;}
+.dash-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}
+.kpi{border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:#fff;}
+.kpi .rot{font-size:11.5px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+.kpi .val{font-size:26px;font-weight:800;color:var(--ink);line-height:1.15;margin-top:2px;font-variant-numeric:tabular-nums;}
+.kpi .det{font-size:12px;color:var(--ink-soft);}
+.kpi.agora{border-color:#A5B4FC;background:#F5F7FF;}
+.dash-card{border:1px solid var(--rule);border-radius:10px;padding:12px 14px;background:#fff;}
+.dash-card h4{margin:0 0 2px;font-size:14px;color:var(--ink);}
+.dash-card .sub{font-size:12px;color:var(--ink-soft);margin-bottom:8px;}
+.dash-leg{display:flex;gap:14px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;}
+.dash-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+.dash-graf{overflow-x:auto;}
+.dash-graf svg{display:block;min-width:720px;width:100%;height:auto;}
+.dash-graf rect.hit{cursor:crosshair;}
+.dash-tip{position:fixed;z-index:90;pointer-events:none;background:#1B2033;color:#fff;font-size:12px;line-height:1.45;border-radius:8px;padding:8px 10px;max-width:280px;box-shadow:0 6px 20px rgba(0,0,0,.18);}
+.dash-tip b{font-variant-numeric:tabular-nums;}
+.dash-alertas{margin:0;padding-left:18px;font-size:13px;line-height:1.6;}
+.dash-alertas .ok{list-style:none;margin-left:-18px;color:#047857;font-weight:600;}
+.tl{display:grid;grid-template-columns:minmax(150px,220px) 1fr;font-size:12px;}
+.tl .nm{padding:3px 8px 3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid #EEF0F6;}
+.tl .nm small{color:var(--ink-soft);margin-left:4px;}
+.tl .tr{position:relative;border-bottom:1px solid #EEF0F6;min-height:24px;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/12 - 1px),#EEF0F6 calc(100%/12 - 1px),#EEF0F6 calc(100%/12));}
+.tl .bar{position:absolute;top:5px;height:14px;border-radius:4px;background:#4F46E5;}
+.tl .bar.ontem{background:#A5B4FC;}
+.tl .pausa{position:absolute;top:5px;height:14px;background:#D97706;border-radius:2px;box-shadow:0 0 0 1px #fff;}
+.tl .eixo{display:flex;justify-content:space-between;color:var(--ink-soft);font-size:11px;padding-top:4px;}
+.tl .grp{grid-column:1 / -1;font-weight:700;color:var(--indigo-900);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:10px 0 4px;}
+.tl .agora{position:absolute;top:0;bottom:0;width:2px;background:#DC2626;}
+@media (max-width:640px){ .tl{grid-template-columns:110px 1fr;} .tl .nm small{display:none;} .tl .tr{min-width:520px;} .tl-wrap{overflow-x:auto;} }
+
 .rel-tela{position:fixed;inset:0;z-index:80;background:#fff;display:flex;flex-direction:column;}
 .rel-tela-top{background:var(--indigo-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
 .rel-tela-top h3{margin:0;font-size:15px;flex:1;min-width:180px;}
@@ -307,6 +341,7 @@ body:not(.travado) .trava{display:none;}
     <div class="top-actions">
       <button class="btn btn-nuvem" id="btn-nuvem" title="Salvar na nuvem, publicar e gerenciar acessos"><span class="nv-dot" id="nv-dot"></span><span id="nv-txt">Nuvem: desconectado</span></button>
       <button class="btn btn-dark" id="btn-novo">+ Novo funcionário</button>
+      <button class="btn btn-dark" id="btn-dash">Dashboard</button>
       <button class="btn btn-dark" id="btn-rel">Relatórios</button>
       <button class="btn btn-dark" id="btn-xlsx">Exportar Excel</button>
       <button class="btn btn-dark" id="btn-pdf">Exportar PDF</button>
@@ -2552,11 +2587,185 @@ function pdfRelatorio(){
   doc.save(nome);
 }
 
+
+// ---------- Dashboard: quantos trabalham em cada horário ----------
+const DASH_PASSO = 15; // minutos por coluna
+const COR_TRAB = '#4F46E5', COR_PAUSA = '#D97706';
+function dadosDash(iso, setor){
+  const d12 = modelo12() ? distribuicao12() : null, autoI = intervalosAuto(d12);
+  const gCache = {}, pessoas = [], folga = [], dia0 = fromIso(iso);
+  [-1, 0].forEach(off=>{
+    const tt = dia0 + off * DAY, mes = toIso(tt).slice(0,7);
+    const g = gCache[mes] || (gCache[mes] = gerar(mes));
+    filtrarSetor(state.employees, setor).forEach(e=>{
+      const it = intervaloDe(e, d12, autoI);
+      const d = descreverDia(e, valor(g, e.id, tt), tt, d12, it);
+      if(!d.h){ if(off===0) folga.push({ nome:e.nome, setor:e.setor, ferias: d.s==='V' }); return; }
+      const [a, b] = partesTurno(d.h);
+      const ini = minutos(a) + off * 1440, fim = ini + (mod(minutos(b) - minutos(a), 1440) || 1440);
+      if(fim <= 0 || ini >= 1440) return;
+      let pi = null, pf = null;
+      if(d.i){ const [ia, ib] = partesTurno(d.i); pi = minutos(ia) + off * 1440; if(pi < ini) pi += 1440; pf = pi + mod(minutos(ib) - minutos(ia), 1440); }
+      pessoas.push({ id:e.id, nome:e.nome, setor:e.setor, ini, fim, pi, pf, ontem: off < 0, h:d.h, i:d.i, turma: d12 ? d12[e.id].turma : '' });
+    });
+  });
+  const n = 1440 / DASH_PASSO;
+  const serie = st => Array.from({ length:n }, (_, k)=>{
+    const m = k * DASH_PASSO, trab = [], pausa = [];
+    pessoas.forEach(p=>{
+      if(st && p.setor !== st) return;
+      if(p.ini <= m && m < p.fim) ((p.pi !== null && p.pi <= m && m < p.pf) ? pausa : trab).push(p);
+    });
+    return { m, trab, pausa };
+  });
+  const setores = setor==='todos' ? ['pista','caixas'] : [setor];
+  const series = {}; setores.forEach(st=> series[st] = serie(st));
+  return { iso, setor, setores, pessoas, folga, series, total: serie(null) };
+}
+const curto = nome => nome.split(' ').slice(0,2).join(' ');
+const faixaM = (a, b) => hhmm(a) + '–' + (b >= 1440 ? '24:00' : hhmm(b));
+function alertasDash(D){
+  const out = [];
+  D.setores.forEach(st=>{
+    const s = D.series[st], rot = SETORES[st].split(' /')[0];
+    let k = 0;
+    while(k < s.length){
+      const zero = s[k].trab.length === 0;
+      if(!zero){ k++; continue; }
+      let j = k; while(j < s.length && s[j].trab.length === 0 && (s[j].pausa.length > 0) === (s[k].pausa.length > 0)) j++;
+      const pausa = s[k].pausa;
+      out.push(pausa.length
+        ? `<b>${rot}:</b> ninguém atendendo das ${faixaM(s[k].m, j*DASH_PASSO)}: ${pausa.map(p=>esc(curto(p.nome))).join(', ')} em intervalo`
+        : `<b>${rot}:</b> ninguém escalado das ${faixaM(s[k].m, j*DASH_PASSO)}`);
+      k = j;
+    }
+  });
+  return out;
+}
+function graficoDash(serie, titulo){
+  const W = 960, H = 210, L = 30, R = 18, T = 10, B = 26, n = serie.length;
+  const max = Math.max(1, ...serie.map(x=> x.trab.length + x.pausa.length));
+  const passoY = max > 12 ? 4 : max > 6 ? 2 : 1, topo = Math.max(4, Math.ceil(max / passoY) * passoY);
+  const cw = (W - L - R) / n, y = v => T + (H - T - B) * (1 - v / topo), base = y(0);
+  let g = '';
+  for(let v = 0; v <= topo; v += passoY) g += `<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="${v===0?'#9AA1B9':'#EEF0F6'}" stroke-width="1"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="#5E6680">${v}</text>`;
+  for(let h = 0; h <= 24; h += 2) g += `<text x="${L + h*60/DASH_PASSO*cw}" y="${H-8}" text-anchor="middle" font-size="11" fill="#5E6680">${String(h).padStart(2,'0')}h</text>`;
+  serie.forEach((x, k)=>{
+    const X = L + k*cw + 0.5, w = Math.max(1, cw - 1.5), t = x.trab.length, p = x.pausa.length;
+    if(t) g += `<rect x="${X}" y="${y(t)}" width="${w}" height="${base - y(t)}" fill="${COR_TRAB}" rx="1.5"/>`;
+    if(p) g += `<rect x="${X}" y="${y(t+p)}" width="${w}" height="${y(t) - y(t+p) - (t?1.5:0)}" fill="${COR_PAUSA}" rx="1.5"/>`;
+    g += `<rect class="hit" data-k="${k}" x="${L + k*cw}" y="${T}" width="${cw}" height="${H-T-B}" fill="transparent"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(titulo)}">${g}</svg>`;
+}
+function linhaTempo(D){
+  const pct = m => (Math.max(0, Math.min(1440, m)) / 1440 * 100).toFixed(3) + '%';
+  const larg = (a, b) => ((Math.min(1440, b) - Math.max(0, a)) / 1440 * 100).toFixed(3) + '%';
+  const hojeMin = D.iso === hojeIsoDia() ? (()=>{ const d = new Date(); return d.getHours()*60 + d.getMinutes(); })() : null;
+  let h = '';
+  D.setores.forEach(st=>{
+    const lista = D.pessoas.filter(p=>p.setor===st).sort((a,b)=> a.ini - b.ini || a.nome.localeCompare(b.nome));
+    if(D.setores.length > 1) h += `<div class="grp">${esc(SETORES[st])}</div>`;
+    lista.forEach(p=>{
+      const dica = `${p.nome} · ${p.h}${p.ontem ? ' (começou ontem)' : ''}${p.i ? ' · intervalo ' + p.i : ' · sem intervalo'}`;
+      h += `<div class="nm" title="${esc(dica)}"><b>${esc(curto(p.nome))}</b><small>${esc(p.h)}</small></div>
+        <div class="tr" title="${esc(dica)}"><div class="bar ${p.ontem?'ontem':''}" style="left:${pct(p.ini)};width:${larg(p.ini,p.fim)}"></div>
+        ${p.pi !== null && p.pf > 0 && p.pi < 1440 ? `<div class="pausa" style="left:${pct(p.pi)};width:${larg(p.pi,p.pf)}"></div>` : ''}
+        ${hojeMin !== null ? `<div class="agora" style="left:${pct(hojeMin)}"></div>` : ''}</div>`;
+    });
+  });
+  const eixo = Array.from({ length:13 }, (_, i)=> `<span>${String(i*2).padStart(2,'0')}h</span>`).join('');
+  return `<div class="tl-wrap"><div class="tl">${h}<div></div><div class="eixo">${eixo}</div></div></div>`;
+}
+let dashUlt = null;
+function htmlDash(D){
+  const tot = D.total, picos = tot.map(x=>x.trab.length);
+  const max = Math.max(...picos), kMax = picos.indexOf(max);
+  // menor cobertura só nos horários em que há alguém escalado
+  let min = Infinity, kMin = 0; tot.forEach((x,k)=>{ if((x.trab.length + x.pausa.length) && x.trab.length < min){ min = x.trab.length; kMin = k; } });
+  if(min === Infinity) min = 0;
+  const fimTrecho = (k, cond) => { let j = k; while(j < tot.length && cond(tot[j])) j++; return j * DASH_PASSO; };
+  const doDia = D.pessoas.filter(p=>!p.ontem);
+  const nPausas = D.pessoas.filter(p=>p.pi !== null).length;
+  const maxPausa = Math.max(0, ...tot.map(x=>x.pausa.length));
+  const ferias = D.folga.filter(f=>f.ferias).length;
+  const alertas = alertasDash(D);
+  let agora = '';
+  if(D.iso === hojeIsoDia()){
+    const d = new Date(), m = d.getHours()*60 + d.getMinutes(), x = tot[Math.floor(m / DASH_PASSO)];
+    agora = `<div class="kpi agora"><div class="rot">Agora · ${hhmm(m)}</div><div class="val">${x.trab.length}</div><div class="det">trabalhando${x.pausa.length ? ` · ${x.pausa.length} em intervalo` : ''}</div></div>`;
+  }
+  const kpis = `<div class="dash-kpis">${agora}
+    <div class="kpi"><div class="rot">Plantões no dia</div><div class="val">${doDia.length}</div><div class="det">${D.setores.map(st=>`${SETORES[st].split(' /')[0]} ${doDia.filter(p=>p.setor===st).length}`).join(' · ')}</div></div>
+    <div class="kpi"><div class="rot">De folga</div><div class="val">${D.folga.length - ferias}</div><div class="det">${ferias ? ferias + ' de férias' : 'ninguém de férias'}</div></div>
+    <div class="kpi"><div class="rot">Mais gente ao mesmo tempo</div><div class="val">${max}</div><div class="det">das ${faixaM(kMax*DASH_PASSO, fimTrecho(kMax, x=>x.trab.length===max))}</div></div>
+    <div class="kpi"><div class="rot">Menor cobertura</div><div class="val">${min}</div><div class="det">das ${faixaM(kMin*DASH_PASSO, fimTrecho(kMin, x=>x.trab.length===min))}</div></div>
+    <div class="kpi"><div class="rot">Intervalos no dia</div><div class="val">${nPausas}</div><div class="det">até ${maxPausa} ao mesmo tempo</div></div>
+  </div>`;
+  const leg = `<div class="dash-leg"><span><i style="background:${COR_TRAB}"></i>Trabalhando</span><span><i style="background:${COR_PAUSA}"></i>Em intervalo</span></div>`;
+  const graficos = D.setores.map(st=>`<div class="dash-card"><h4>${esc(SETORES[st])} · pessoas por horário</h4>
+      <div class="sub">Cada coluna é um trecho de 15 minutos. Passe o mouse (ou toque) para ver quem está trabalhando e quem está em intervalo.</div>${leg}
+      <div class="dash-graf" data-st="${st}">${graficoDash(D.series[st], SETORES[st])}</div></div>`).join('');
+  const al = `<div class="dash-card"><h4>Pontos de atenção</h4><div class="sub">Horários em que um setor fica sem ninguém atendendo.</div>
+      <ul class="dash-alertas">${alertas.length ? alertas.map(a=>`<li>${a}</li>`).join('') : '<li class="ok">✓ Nenhum horário descoberto neste dia.</li>'}</ul></div>`;
+  const tl = `<div class="dash-card"><h4>Linha do tempo do dia</h4>
+      <div class="sub">Barra azul = no posto · laranja = intervalo · azul claro = plantão que começou na noite anterior${D.iso === hojeIsoDia() ? ' · linha vermelha = agora' : ''}.</div>${linhaTempo(D)}</div>`;
+  return kpis + tl + graficos + al;
+}
+function abrirDash(iso){
+  iso = iso || (dashUlt && dashUlt.iso) || hojeIsoDia();
+  const setor = (dashUlt && dashUlt.setor) || 'todos';
+  const D = dashUlt = dadosDash(iso, setor);
+  let d = document.getElementById('dash-tela');
+  const novo = !d;
+  if(novo){ d = document.createElement('div'); d.className = 'rel-tela'; d.id = 'dash-tela'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); document.getElementById('modal-root').appendChild(d); }
+  const corpoScroll = novo ? 0 : d.querySelector('.rel-tela-corpo').scrollTop;
+  d.innerHTML = `<div class="rel-tela-top"><h3>Dashboard da escala<small>${esc(tituloData(fromIso(iso)))} · escala ${esc(nomeModelo())}</small></h3>
+      <div class="dash-filtros">
+        <button type="button" class="nav" id="dash-ant" aria-label="Dia anterior">‹</button>
+        <input type="date" id="dash-dia" value="${iso}">
+        <button type="button" class="nav" id="dash-prox" aria-label="Próximo dia">›</button>
+        <button type="button" class="nav" id="dash-hoje">Hoje</button>
+        <select id="dash-setor"><option value="todos">Pista e caixas</option><option value="pista">Só pista</option><option value="caixas">Só caixas</option></select>
+      </div>
+      <button type="button" class="btn" id="dash-fechar" style="background:#fff;color:var(--indigo-900);">✕ Fechar</button></div>
+    <div class="rel-tela-corpo" style="background:#F4F5FA;">${htmlDash(D)}</div>`;
+  d.querySelector('#dash-setor').value = setor;
+  d.querySelector('.rel-tela-corpo').scrollTop = corpoScroll;
+}
+function fecharDash(){ const d = document.getElementById('dash-tela'); if(d) d.remove(); const t = document.getElementById('dash-tip'); if(t) t.remove(); }
+function dicaDash(ev){
+  const r = ev.target.closest && ev.target.closest('rect.hit');
+  let tip = document.getElementById('dash-tip');
+  if(!r || !dashUlt){ if(tip) tip.remove(); return; }
+  const st = r.closest('.dash-graf').dataset.st, x = dashUlt.series[st][Number(r.dataset.k)];
+  if(!tip){ tip = document.createElement('div'); tip.id = 'dash-tip'; tip.className = 'dash-tip'; document.body.appendChild(tip); }
+  const nomes = l => l.map(p=>esc(curto(p.nome))).join(', ');
+  tip.innerHTML = `<b>${faixaM(x.m, x.m + DASH_PASSO)}</b> · ${esc(SETORES[st].split(' /')[0])}<br>
+    <b>${x.trab.length}</b> trabalhando${x.trab.length ? ': ' + nomes(x.trab) : ''}<br>
+    <b>${x.pausa.length}</b> em intervalo${x.pausa.length ? ': ' + nomes(x.pausa) : ''}`;
+  const px = ev.clientX, py = ev.clientY, tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - tw - 8, px + 14) + 'px';
+  tip.style.top = (py - th - 12 < 8 ? py + 16 : py - th - 12) + 'px';
+}
+document.addEventListener('pointermove', dicaDash);
+document.addEventListener('scroll', ()=>{ const t = document.getElementById('dash-tip'); if(t) t.remove(); }, true);
+document.addEventListener('pointerdown', ev=>{ if(ev.pointerType !== 'mouse') dicaDash(ev); });
+document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && document.getElementById('dash-tela')){ ev.stopImmediatePropagation(); fecharDash(); } }, true);
+document.addEventListener('change', ev=>{
+  if(ev.target.id==='dash-dia' && ev.target.value) abrirDash(ev.target.value);
+  if(ev.target.id==='dash-setor'){ dashUlt.setor = ev.target.value; abrirDash(dashUlt.iso); }
+});
+
 document.addEventListener('submit', ev=>{ if(ev.target.id==='rel-form'){ ev.preventDefault(); abrirRelTela(); } });
 document.addEventListener('change', ev=>{ if(ev.target.id && ev.target.id.startsWith('rel-')) verRelatorio(); });
 document.addEventListener('click', ev=>{
   const b = ev.target.closest('button'); if(!b) return;
   if(b.id==='btn-rel') abrirRelatorios();
+  if(b.id==='btn-dash') abrirDash(hojeIsoDia());
+  if(b.id==='dash-fechar') fecharDash();
+  if(b.id==='dash-hoje') abrirDash(hojeIsoDia());
+  if(b.id==='dash-ant' || b.id==='dash-prox') abrirDash(toIso(fromIso(dashUlt.iso) + (b.id==='dash-ant' ? -DAY : DAY)));
   if(b.id==='rel-pdf'){ verRelatorio(); pdfRelatorio(); }
   if(b.id==='rel-tela-pdf') pdfRelatorio();
   if(b.id==='rel-tela-fechar') fecharRelTela();
