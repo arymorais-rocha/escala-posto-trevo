@@ -69,6 +69,14 @@ main{max-width:560px;margin:0 auto;padding:16px max(16px, env(safe-area-inset-ri
 .hoje .prox b{color:#fff;}
 
 /* mês */
+.abas{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.aba{border:2px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:14px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;}
+.aba span{font-size:15px;font-weight:800;}
+.aba small{font-size:12.5px;color:var(--ink-soft);}
+.aba small::first-letter{text-transform:uppercase;}
+.aba.on{border-color:var(--amber);background:var(--amber-soft);}
+.aba:disabled{opacity:.55;cursor:default;}
+.aba:focus-visible{outline:3px solid var(--amber);outline-offset:2px;}
 .mesnav{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .mesnav h2{margin:0;font-size:18px;}
 .mesnav h2::first-letter,.detalhe h3::first-letter{text-transform:uppercase;}
@@ -107,6 +115,13 @@ main{max-width:560px;margin:0 auto;padding:16px max(16px, env(safe-area-inset-ri
 .aviso{background:var(--amber-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.45;}
 .vazio{text-align:center;color:var(--ink-soft);line-height:1.6;}
 .carregando{text-align:center;color:var(--ink-soft);padding:30px 0;}
+.aviso-int h3{margin:0 0 6px;font-size:16px;}
+.aviso-int p{margin:0 0 12px;font-size:14px;line-height:1.5;color:var(--ink-soft);}
+.aviso-int p b{color:var(--ink);}
+.aviso-int .ok{color:var(--trab-ink);font-weight:700;}
+.av-acoes{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.btn-sec{border:1px solid var(--rule);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;cursor:pointer;font-size:15px;}
+.av-msg{margin:12px 0 0 !important;padding:9px 11px;border-radius:10px;background:var(--amber-soft);color:var(--ink) !important;}
 @media (prefers-reduced-motion: no-preference){ .dia{transition:transform .12s;} .dia:active{transform:scale(.94);} }
 </style>
 </head>
@@ -134,7 +149,7 @@ main{max-width:560px;margin:0 auto;padding:16px max(16px, env(safe-area-inset-ri
 // =====================================================================
 const API = 'https://script.google.com/macros/s/AKfycbzzPr5PBpuJ2PmRsoqnoCfJtZSJvuMS1iVuUHX4K41J-J1DXbS1fwpHrA2WGxg8aQp_/exec';
 
-const K_SESSAO = 'minha-escala-sessao', K_CACHE = 'minha-escala-cache';
+const K_SESSAO = 'minha-escala-sessao', K_CACHE = 'minha-escala-cache', K_AVISO = 'minha-escala-aviso';
 const DIAS = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
 const DSEM = ['D','S','T','Q','Q','S','S'];
 let sessao = ler(K_SESSAO) || null;   // { token, nome, setor }
@@ -195,7 +210,7 @@ async function entrar(ev){
     carregarMes();
   }catch(e){ telaLogin(e.message); }
 }
-function sair(){ sessao = null; atual = null; gravar(K_SESSAO, null); gravar(K_CACHE, null); telaLogin(); }
+function sair(){ desligarAvisoAoSair(); sessao = null; atual = null; gravar(K_SESSAO, null); gravar(K_CACHE, null); telaLogin(); }
 
 // ---------- escala ----------
 async function carregarMes(mes){
@@ -216,6 +231,7 @@ async function carregarMes(mes){
   }
   diaSel = null;
   telaEscala();
+  renovarAviso();
 }
 
 function codigoCurto(s){ return s==='V' ? 'FÉ' : s==='F' ? 'F' : 'T'; }
@@ -267,10 +283,21 @@ function telaEscala(){
       ${sel.i ? `<div class="linha">Intervalo: <b>${esc(sel.i)}</b></div>` : ''}
     </section>` : '';
 
+  // abas "Este mês" e "Próximo mês"
+  const mesHoje = hojeIso();
+  const [hy, hm] = mesHoje.split('-').map(Number);
+  const mesSeg = hm === 12 ? (hy+1) + '-01' : hy + '-' + String(hm+1).padStart(2,'0');
+  const temSeg = r.meses.indexOf(mesSeg) >= 0, temHoje = r.meses.indexOf(mesHoje) >= 0;
+  const aba = (mes, rotulo, tem) => `<button class="aba ${r.mes===mes ? 'on' : ''}" ${tem ? `data-mes="${mes}"` : 'disabled'} aria-pressed="${r.mes===mes}">
+      <span>${rotulo}</span><small>${tem ? esc(nomeMes(mes).replace(/ de \d{4}$/, '')) : 'ainda não publicado'}</small></button>`;
+  const abas = `<div class="abas" role="group" aria-label="Escolher mês">${aba(mesHoje, 'Este mês', temHoje)}${aba(mesSeg, 'Próximo mês', temSeg)}</div>`;
+
   const temN = dias.some(x=>x.s==='N'), temC = dias.some(x=>x.s==='C'), temV = dias.some(x=>x.s==='V'), temD = dias.some(x=>x.s==='D');
   app().innerHTML = `
     ${r.offline ? '<div class="aviso">Sem internet. Mostrando a última versão baixada.</div>' : ''}
+    ${abas}
     ${cartao}
+    ${cartaoAviso(d)}
     <section class="card">
       <div class="mesnav">
         <button id="m-ant" aria-label="Mês anterior" ${iMes<=0?'disabled':''}>‹</button>
@@ -297,12 +324,117 @@ function telaEscala(){
     <div class="rodape">Publicado pela gerência${r.publicadoEm ? ' em ' + esc(new Date(r.publicadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})) : ''}.<br>Dúvidas sobre a escala? Fale com a gerência.</div>`;
 }
 
+// ---------- aviso de fim do intervalo (notificação pelo Firebase) ----------
+// A gerência liga os avisos no servidor. Aqui o colaborador só autoriza o próprio celular.
+const FB_VER = '10.12.2';
+let avisoEstado = null, avisoMsg = '';
+const suportaPush = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const ehIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const instalado = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function estadoAviso(){
+  if(!suportaPush()) return ehIOS() && !instalado() ? 'iphone' : 'sem-suporte';
+  if(Notification.permission === 'denied') return 'negado';
+  return ler(K_AVISO) && Notification.permission === 'granted' ? 'ligado' : 'desligado';
+}
+function cartaoAviso(d){
+  if(!d.intervalo || !/\d{1,2}:\d{2}/.test(d.intervalo)) return ''; // quem não tem intervalo não precisa do aviso
+  const st = avisoEstado || estadoAviso();
+  const corpo = {
+    ligado: `<p class="ok">✓ Ligado neste celular</p><p>Você recebe uma notificação 5 minutos antes do fim do intervalo.</p>
+      <div class="av-acoes"><button class="btn-sec" id="av-testar">Enviar teste</button><button class="btn-sec" id="av-desligar">Desligar</button></div>`,
+    desligado: `<p>Receba uma notificação no celular <b>5 minutos antes do fim do seu intervalo</b>.</p><button class="btn" id="av-ligar">🔔 Ligar aviso</button>`,
+    carregando: `<p>Ligando o aviso… se o celular perguntar, toque em <b>Permitir</b>.</p>`,
+    negado: `<p>As notificações deste app estão bloqueadas. Libere em <b>Configurações do celular → Notificações</b> (ou nas permissões do site, no navegador) e volte aqui.</p>`,
+    iphone: `<p>No iPhone o aviso só funciona com o app instalado: toque em <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>, abra o app pelo ícone novo e ligue o aviso por lá.</p>`,
+    'sem-suporte': `<p>Este navegador não recebe notificações. No Android, abra o app pelo <b>Chrome</b>.</p>`,
+    'off-servidor': `<p>A gerência ainda não ativou os avisos. Tente de novo mais tarde.</p>`,
+  }[st] || '';
+  return `<section class="card aviso-int" aria-live="polite"><h3>🔔 Aviso do fim do intervalo</h3>${corpo}${avisoMsg ? `<p class="av-msg">${esc(avisoMsg)}</p>` : ''}</section>`;
+}
+let fbPronto = null;
+function carregarScript(src){
+  return new Promise((ok, falha)=>{ const s = document.createElement('script'); s.src = src; s.onload = ok;
+    s.onerror = ()=>{ s.remove(); falha(new Error('Não consegui carregar o serviço de notificações. Confira a internet.')); }; document.head.appendChild(s); });
+}
+function firebaseMsg(cfg){
+  if(!fbPronto) fbPronto = (async()=>{
+    await carregarScript(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app-compat.js`);
+    await carregarScript(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-messaging-compat.js`);
+    if(!firebase.apps.length) firebase.initializeApp(cfg);
+    return firebase.messaging();
+  })().catch(e=>{ fbPronto = null; throw e; });
+  return fbPronto;
+}
+async function pegarCodigo(c){
+  await navigator.serviceWorker.register('sw.js');
+  const reg = await navigator.serviceWorker.ready;
+  const msg = await firebaseMsg(c.config);
+  const aparelho = await msg.getToken({ vapidKey: c.vapid, serviceWorkerRegistration: reg });
+  if(!aparelho) throw new Error('O celular não gerou o código de notificação. Tente de novo.');
+  return aparelho;
+}
+async function ligarAviso(){
+  avisoMsg = '';
+  // a permissão precisa ser pedida logo no toque (exigência do iPhone)
+  const pedido = Notification.requestPermission();
+  avisoEstado = 'carregando'; telaEscala();
+  try{
+    const perm = await pedido;
+    if(perm !== 'granted'){ avisoEstado = null; avisoMsg = perm === 'denied' ? '' : 'Você não permitiu as notificações. Toque em "Ligar aviso" de novo e escolha Permitir.'; return telaEscala(); }
+    const c = await api('avisoConfig', { token: sessao.token });
+    if(!c.ok) throw new Error(c.erro);
+    if(!c.ligado){ avisoEstado = 'off-servidor'; return telaEscala(); }
+    const aparelho = await pegarCodigo(c);
+    const r = await api('avisoLigar', { token: sessao.token, aparelho });
+    if(!r.ok) throw new Error(r.erro);
+    gravar(K_AVISO, { aparelho, em: Date.now() });
+    avisoEstado = null; avisoMsg = 'Pronto! Toque em "Enviar teste" para conferir se a notificação chega.';
+  }catch(e){ avisoEstado = null; avisoMsg = e.message || 'Não consegui ligar o aviso.'; }
+  telaEscala();
+}
+async function desligarAviso(){
+  const a = ler(K_AVISO);
+  gravar(K_AVISO, null); avisoEstado = null; avisoMsg = 'Aviso desligado neste celular.'; telaEscala();
+  try{ await api('avisoDesligar', { token: sessao.token, aparelho: a && a.aparelho }); }catch(e){}
+  try{ if(fbPronto) await (await fbPronto).deleteToken(); }catch(e){}
+}
+async function testarAviso(){
+  avisoMsg = 'Enviando o teste…'; telaEscala();
+  try{
+    const r = await api('avisoTestar', { token: sessao.token });
+    if(r.ok) avisoMsg = 'Teste enviado. A notificação deve chegar em alguns segundos (se não chegar, confira se as notificações do app estão permitidas).';
+    else { avisoMsg = r.erro; if(/cadastrado|ligue os avisos/i.test(r.erro || '')) gravar(K_AVISO, null); }
+  }catch(e){ avisoMsg = e.message; }
+  telaEscala();
+}
+// o código do celular pode mudar com o tempo: confere em silêncio uma vez por semana
+async function renovarAviso(){
+  const a = ler(K_AVISO);
+  if(!a || !suportaPush() || Notification.permission !== 'granted' || Date.now() - (a.em || 0) < 7 * 864e5) return;
+  try{
+    const c = await api('avisoConfig', { token: sessao.token });
+    if(!c.ok || !c.ligado) return;
+    const aparelho = await pegarCodigo(c);
+    { const r = await api('avisoLigar', { token: sessao.token, aparelho }); if(r.ok) gravar(K_AVISO, { aparelho, em: Date.now() }); }
+  }catch(e){}
+}
+// ao sair, o celular deixa de receber os avisos (outra pessoa pode entrar nele)
+function desligarAvisoAoSair(){
+  const a = ler(K_AVISO);
+  if(a && sessao) api('avisoDesligar', { token: sessao.token, aparelho: a.aparelho }).catch(()=>{});
+  gravar(K_AVISO, null); avisoEstado = null; avisoMsg = '';
+}
+
 document.addEventListener('submit', ev=>{ if(ev.target.id==='f-login') entrar(ev); });
 document.addEventListener('click', ev=>{
   const b = ev.target.closest('button'); if(!b) return;
   if(b.id==='btn-sair') return sair();
   if(b.id==='btn-tentar') return carregarMes();
+  if(b.id==='av-ligar') return ligarAviso();
+  if(b.id==='av-desligar') return desligarAviso();
+  if(b.id==='av-testar') return testarAviso();
   if(b.dataset.dia){ diaSel = Number(b.dataset.dia); telaEscala(); return; }
+  if(b.dataset.mes){ if(b.dataset.mes !== atual.mes) carregarMes(b.dataset.mes); return; }
   if(b.id==='m-ant' || b.id==='m-prox'){
     const i = atual.meses.indexOf(atual.mes) + (b.id==='m-ant' ? -1 : 1);
     if(atual.meses[i]) carregarMes(atual.meses[i]);

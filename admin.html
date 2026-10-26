@@ -2118,7 +2118,7 @@ async function abrirAcessos(msgHtml){
   const linhas = ordenar(state.employees.slice()).map(e=>{
     const c = porId[e.id];
     const chip = !c || !c.temPin ? '<span class="chip chip-sem">sem PIN</span>' : c.ativo ? '<span class="chip chip-ok">ativo</span>' : '<span class="chip chip-bloq">bloqueado</span>';
-    return `<div class="nv-item"><div><b>${esc(e.nome)}</b>${chip}<small>${e.setor==='pista'?'Pista':'Caixas'}${c && c.ultimoAcesso ? ' · último acesso ' + esc(c.ultimoAcesso) : ''}</small></div>
+    return `<div class="nv-item"><div><b>${esc(e.nome)}</b>${chip}<small>${e.setor==='pista'?'Pista':'Caixas'}${c && c.ultimoAcesso ? ' · último acesso ' + esc(c.ultimoAcesso) : ''}${c && c.avisos ? ' · 🔔 aviso do intervalo ligado' : ''}</small></div>
       <div class="nv-acoes">
         <button class="btn btn-dark" data-pin="${e.id}">${c && c.temPin ? 'Novo PIN' : 'Gerar PIN'}</button>
         ${c && c.temPin ? `<button class="btn ${c.ativo?'btn-danger':'btn-light'}" data-ativar="${e.id}" data-valor="${c.ativo?0:1}">${c.ativo?'Bloquear':'Liberar'}</button>` : ''}
