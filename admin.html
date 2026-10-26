@@ -2693,7 +2693,12 @@ function htmlDash(D){
   let agora = '';
   if(D.iso === hojeIsoDia()){
     const d = new Date(), m = d.getHours()*60 + d.getMinutes(), x = tot[Math.floor(m / DASH_PASSO)];
-    agora = `<div class="kpi agora"><div class="rot">Agora · ${hhmm(m)}</div><div class="val">${x.trab.length}</div><div class="det">trabalhando${x.pausa.length ? ` · ${x.pausa.length} em intervalo` : ''}</div></div>`;
+    const nome = { pista:['frentista','frentistas'], caixas:['caixa','caixas'] };
+    const qt = (l, st) => l.filter(p=>p.setor===st).length;
+    const linha = (n, st, txt) => `<div><b style="color:var(--ink);">${n}</b> ${nome[st][n===1?0:1]} ${txt}</div>`;
+    const det = D.setores.map(st=> linha(qt(x.trab, st), st, 'trabalhando')).join('')
+      + D.setores.map(st=>{ const n = qt(x.pausa, st); return n ? linha(n, st, 'em intervalo') : ''; }).join('');
+    agora = `<div class="kpi agora"><div class="rot">Agora · ${hhmm(m)}</div><div class="val">${x.trab.length}</div><div class="det">trabalhando no total</div><div class="det" style="margin-top:4px;line-height:1.5;">${det}</div></div>`;
   }
   const kpis = `<div class="dash-kpis">${agora}
     <div class="kpi"><div class="rot">Plantões no dia</div><div class="val">${doDia.length}</div><div class="det">${D.setores.map(st=>`${SETORES[st].split(' /')[0]} ${doDia.filter(p=>p.setor===st).length}`).join(' · ')}</div></div>
